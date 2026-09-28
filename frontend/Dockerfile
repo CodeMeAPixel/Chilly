@@ -8,6 +8,7 @@ RUN bun install --frozen-lockfile
 COPY . .
 ARG SITE_URL
 ENV SITE_URL=${SITE_URL} \
+    NEXT_OUTPUT=standalone \
     NEXT_TELEMETRY_DISABLED=1
 RUN bun run build
 
