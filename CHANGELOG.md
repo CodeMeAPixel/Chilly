@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- AzuraCast polling no longer fails when a track reports a fractional duration.
+
 ## [1.0.0] - 2026-09-28
 
 The first public release of Chilly: a self-hosted Discord music bot with a web dashboard, live status page and AzuraCast radio.

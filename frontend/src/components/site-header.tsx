@@ -1,5 +1,7 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 import { Logo } from "./logo";
+import { MobileNav } from "./mobile-nav";
 import { ThemeToggle } from "./theme-toggle";
 import { UserNav } from "./user-nav";
 
@@ -11,10 +13,10 @@ const links = [
   { href: "/dashboard", label: "Dashboard" },
 ];
 
-export function SiteHeader() {
+export function SiteHeader({ menu }: { menu?: ReactNode }) {
   return (
     <header className="sticky top-0 z-40 h-0 px-3">
-      <div className="mx-auto flex h-14 max-w-6xl translate-y-3 items-center justify-between gap-4 rounded-full border border-border bg-surface/70 pr-2 pl-5 shadow-[0_10px_40px_-20px_rgb(0_0_0/0.5)] backdrop-blur-xl">
+      <div className="relative mx-auto flex h-14 max-w-6xl translate-y-3 items-center justify-between gap-4 rounded-full border border-border bg-surface/70 pr-2 pl-5 shadow-[0_10px_40px_-20px_rgb(0_0_0/0.5)] backdrop-blur-xl">
         <div className="flex items-center gap-8">
           <Logo />
           <nav className="hidden items-center gap-1 md:flex">
@@ -32,6 +34,7 @@ export function SiteHeader() {
         <div className="flex items-center gap-2">
           <ThemeToggle />
           <UserNav />
+          <MobileNav links={links}>{menu}</MobileNav>
         </div>
       </div>
     </header>

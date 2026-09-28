@@ -8,7 +8,7 @@ import { Equalizer, Skeleton } from "@/components/ui";
 import { useGuilds } from "@/hooks/use-me";
 import { cn } from "@/lib/format";
 
-export function DashboardNav() {
+export function DashboardNav({ className }: { className?: string }) {
   const pathname = usePathname();
   const { data: guilds, isLoading } = useGuilds();
 
@@ -19,7 +19,7 @@ export function DashboardNav() {
     );
 
   return (
-    <nav className="sticky top-24 space-y-6">
+    <nav className={cn("space-y-6", className)}>
       <div className="space-y-1">
         <Link href="/dashboard" className={item("/dashboard", pathname === "/dashboard")}>
           <LayoutGrid className="h-4 w-4" /> Servers

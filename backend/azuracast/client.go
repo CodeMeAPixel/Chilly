@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"net/url"
 	"time"
@@ -118,28 +119,43 @@ type Song struct {
 }
 
 type CurrentSong struct {
-	ShID      int    `json:"sh_id"`
-	PlayedAt  int64  `json:"played_at"`
-	Duration  int    `json:"duration"`
-	Playlist  string `json:"playlist"`
-	Streamer  string `json:"streamer"`
-	IsRequest bool   `json:"is_request"`
-	Song      Song   `json:"song"`
-	Elapsed   int    `json:"elapsed"`
-	Remaining int    `json:"remaining"`
+	ShID      int     `json:"sh_id"`
+	PlayedAt  int64   `json:"played_at"`
+	Duration  Seconds `json:"duration"`
+	Playlist  string  `json:"playlist"`
+	Streamer  string  `json:"streamer"`
+	IsRequest bool    `json:"is_request"`
+	Song      Song    `json:"song"`
+	Elapsed   Seconds `json:"elapsed"`
+	Remaining Seconds `json:"remaining"`
 }
 
 type StationQueue struct {
-	CuedAt   int64  `json:"cued_at"`
-	Duration int    `json:"duration"`
-	Playlist string `json:"playlist"`
-	Song     Song   `json:"song"`
+	CuedAt   int64   `json:"cued_at"`
+	Duration Seconds `json:"duration"`
+	Playlist string  `json:"playlist"`
+	Song     Song    `json:"song"`
 }
 
 type HistoryEntry struct {
-	ShID     int    `json:"sh_id"`
-	PlayedAt int64  `json:"played_at"`
-	Duration int    `json:"duration"`
-	Playlist string `json:"playlist"`
-	Song     Song   `json:"song"`
+	ShID     int     `json:"sh_id"`
+	PlayedAt int64   `json:"played_at"`
+	Duration Seconds `json:"duration"`
+	Playlist string  `json:"playlist"`
+	Song     Song    `json:"song"`
+}
+
+type Seconds int
+
+func (s *Seconds) UnmarshalJSON(data []byte) error {
+	if string(data) == "null" {
+		*s = 0
+		return nil
+	}
+	var value float64
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	*s = Seconds(math.Round(value))
+	return nil
 }
