@@ -39,7 +39,8 @@ The frontend README explains the backend settings needed for Discord login in de
 2. Keep the change focused on one thing. Unrelated refactors belong in their own pull request.
 3. Add or update tests when you change behaviour. Player, queue and search logic in `backend/musicbot` are unit tested and changes there must keep those tests meaningful.
 4. Update the documentation that your change affects: the root README (features, configuration, API table), `.env.example` files and the frontend README.
-5. Run the checks below and make sure they pass.
+5. Add a line under `## [Unreleased]` in [CHANGELOG.md](CHANGELOG.md) for any change users or self-hosters will notice, in the matching `Added`, `Changed`, `Deprecated`, `Removed`, `Fixed` or `Security` section. Internal refactors, tests and CI changes don't need an entry.
+6. Run the checks below and make sure they pass.
 
 ### Checks
 
@@ -102,6 +103,16 @@ A pull request can be merged when:
 - the change is covered by tests or a clear manual test plan
 - the docs are updated
 - a maintainer has approved it
+
+## Releases
+
+Chilly follows [Semantic Versioning](https://semver.org). The backend and frontend share one version number.
+
+- **Major** for breaking changes to configuration, the API or the database that need action from self-hosters.
+- **Minor** for new features that are backwards compatible.
+- **Patch** for backwards compatible bug fixes.
+
+To cut a release, a maintainer moves the `Unreleased` entries in [CHANGELOG.md](CHANGELOG.md) under a new version heading with the date, updates the compare links at the bottom of the file, bumps `version` in `frontend/package.json`, and pushes a `vX.Y.Z` tag. The backend build takes its version from the tag.
 
 ## Licensing
 

@@ -193,7 +193,8 @@ function ComponentRow({ component, bucketMinutes }: { component: StatusComponent
 
 function NodeCard({ node }: { node: NodeInfo }) {
   const up = node.status === "CONNECTED";
-  const memory = node.memory_allocated ? node.memory_used / node.memory_allocated : 0;
+  const memoryLimit = node.memory_reservable || node.memory_allocated;
+  const memory = memoryLimit ? node.memory_used / memoryLimit : 0;
   const frameLoss = node.frames_sent ? ((node.frames_nulled + node.frames_deficit) / node.frames_sent) * 100 : 0;
 
   return (
@@ -217,9 +218,9 @@ function NodeCard({ node }: { node: NodeInfo }) {
             <Stat label="Uptime" value={formatUptime(node.uptime_ms / 1000)} />
             <Stat label="Frame loss" value={`${frameLoss.toFixed(1)}%`} warn={frameLoss > 2} />
           </div>
-          <Bar icon={Cpu} label="Lavalink CPU" value={node.cpu_load} detail={`${(node.cpu_load * 100).toFixed(1)}% · ${node.cores} cores`} />
-          <Bar icon={Gauge} label="System load" value={node.system_load} detail={`${(node.system_load * 100).toFixed(1)}%`} />
-          <Bar icon={HardDrive} label="Memory" value={memory} detail={`${formatBytes(node.memory_used)} / ${formatBytes(node.memory_allocated)}`} />
+          <Bar icon={Cpu} label="Lavalink CPU" value={node.cpu_load} detail={`${(node.cpu_load * 100).toFixed(1)}%`} />
+          <Bar icon={Gauge} label="Host CPU" value={node.system_load} detail={`${(node.system_load * 100).toFixed(1)}% · ${node.cores} cores`} />
+          <Bar icon={HardDrive} label="Heap memory" value={memory} detail={`${formatBytes(node.memory_used)} / ${formatBytes(memoryLimit)}`} />
         </div>
       ) : (
         <p className="mt-5 text-sm text-muted">This node is unreachable. Players have been moved to a healthy node.</p>

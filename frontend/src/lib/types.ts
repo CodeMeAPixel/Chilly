@@ -123,6 +123,7 @@ export type NodeInfo = {
   cores: number;
   memory_used: number;
   memory_allocated: number;
+  memory_reservable: number;
   frames_sent: number;
   frames_nulled: number;
   frames_deficit: number;

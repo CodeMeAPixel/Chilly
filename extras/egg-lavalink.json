@@ -1,0 +1,145 @@
+{
+    "_comment": "DO NOT EDIT: FILE GENERATED AUTOMATICALLY BY PTERODACTYL PANEL - PTERODACTYL.IO",
+    "meta": {
+        "version": "PTDL_v2",
+        "update_url": null
+    },
+    "exported_at": "2026-09-28T21:30:00+00:00",
+    "name": "Lavalink (Chilly)",
+    "author": "hey@codemeapixel.dev",
+    "description": "Lavalink v4 audio node configured for Chilly: youtube-source with the TV OAuth client and a remote yt-cipher server, LavaSrc and LavaSearch. The built-in YouTube source is disabled.",
+    "features": [
+        "java_version"
+    ],
+    "docker_images": {
+        "Java 21": "ghcr.io/parkervcp/yolks:java_21",
+        "Java 17": "ghcr.io/parkervcp/yolks:java_17"
+    },
+    "file_denylist": [],
+    "startup": "java -Xms128M -XX:MaxRAMPercentage=85.0 -jar Lavalink.jar",
+    "config": {
+        "files": "{\n    \"application.yml\": {\n        \"parser\": \"yml\",\n        \"find\": {\n            \"server.address\": \"0.0.0.0\",\n            \"server.port\": \"{{server.build.default.port}}\",\n            \"lavalink.server.password\": \"{{server.build.env.LAVALINK_PASSWORD}}\",\n            \"plugins.youtube.oauth.refreshToken\": \"{{server.build.env.YOUTUBE_REFRESH_TOKEN}}\",\n            \"plugins.youtube.remoteCipher.url\": \"{{server.build.env.YT_CIPHER_URL}}\",\n            \"plugins.youtube.remoteCipher.password\": \"{{server.build.env.YT_CIPHER_TOKEN}}\",\n            \"plugins.lavasrc.sources.spotify\": \"{{server.build.env.SPOTIFY_ENABLED}}\",\n            \"plugins.lavasrc.spotify.clientId\": \"{{server.build.env.SPOTIFY_CLIENT_ID}}\",\n            \"plugins.lavasrc.spotify.clientSecret\": \"{{server.build.env.SPOTIFY_CLIENT_SECRET}}\"\n        }\n    }\n}",
+        "startup": "{\n    \"done\": \"Lavalink is ready to accept connections.\"\n}",
+        "logs": "{}",
+        "stop": "^C"
+    },
+    "scripts": {
+        "installation": {
+            "script": "#!/bin/bash\nset -euo pipefail\n\nmkdir -p /mnt/server/plugins /mnt/server/logs\ncd /mnt/server\n\nif [ -z \"${LAVALINK_VERSION:-}\" ] || [ \"${LAVALINK_VERSION}\" = \"latest\" ]; then\n  LAVALINK_VERSION=$(curl -fsSL https://api.github.com/repos/lavalink-devs/Lavalink/releases/latest | sed -n 's/.*\"tag_name\": *\"\\([^\"]*\\)\".*/\\1/p' | head -n1)\nfi\n\necho \"Installing Lavalink ${LAVALINK_VERSION}\"\ncurl -fL --retry 3 -o Lavalink.jar.new \"https://github.com/lavalink-devs/Lavalink/releases/download/${LAVALINK_VERSION}/Lavalink.jar\"\nmv Lavalink.jar.new Lavalink.jar\n\nYOUTUBE_SNAPSHOT=false\nif [[ \"${YOUTUBE_PLUGIN_VERSION}\" =~ ^[0-9a-f]{7,40}$ ]]; then\n  YOUTUBE_SNAPSHOT=true\nfi\n\nrm -f plugins/youtube-plugin-*.jar plugins/lavasrc-plugin-*.jar plugins/lavasearch-plugin-*.jar\n\nif [ -f application.yml ]; then\n  cp application.yml \"application.yml.bak\"\n  echo \"Backed up the existing application.yml to application.yml.bak\"\nfi\n\ncat > application.yml <<EOF\nserver:\n  port: 2333\n  address: 0.0.0.0\n  http2:\n    enabled: false\n\nlavalink:\n  plugins:\n    - dependency: \"dev.lavalink.youtube:youtube-plugin:${YOUTUBE_PLUGIN_VERSION}\"\n      snapshot: ${YOUTUBE_SNAPSHOT}\n    - dependency: \"com.github.topi314.lavasrc:lavasrc-plugin:${LAVASRC_VERSION}\"\n      snapshot: false\n    - dependency: \"com.github.topi314.lavasearch:lavasearch-plugin:${LAVASEARCH_VERSION}\"\n      snapshot: false\n  server:\n    password: \"\"\n    sources:\n      youtube: false\n      bandcamp: true\n      soundcloud: true\n      twitch: true\n      vimeo: true\n      nico: true\n      http: true\n      local: false\n    bufferDurationMs: 400\n    frameBufferDurationMs: 5000\n    opusEncodingQuality: 10\n    resamplingQuality: LOW\n    trackStuckThresholdMs: 10000\n    useSeekGhosting: true\n    playerUpdateInterval: 5\n    gc-warnings: true\n\nplugins:\n  youtube:\n    enabled: true\n    allowSearch: true\n    allowDirectVideoIds: true\n    allowDirectPlaylistIds: true\n    clients:\n      - MUSIC\n      - TV\n      - ANDROID_VR\n      - WEB\n      - WEBEMBEDDED\n    oauth:\n      enabled: true\n      refreshToken: \"\"\n    remoteCipher:\n      url: \"\"\n      password: \"\"\n      userAgent: \"chilly\"\n  lavasrc:\n    providers:\n      - 'ytsearch:\"%ISRC%\"'\n      - \"ytsearch:%QUERY%\"\n    sources:\n      spotify: false\n      applemusic: false\n      deezer: false\n      youtube: false\n    spotify:\n      clientId: \"\"\n      clientSecret: \"\"\n      countryCode: \"US\"\n      playlistLoadLimit: 6\n      albumLoadLimit: 6\n\nlogging:\n  file:\n    path: ./logs/\n  level:\n    root: INFO\n    lavalink: INFO\n  request:\n    enabled: true\n    includeClientInfo: true\n    includeHeaders: false\n    includeQueryString: true\n    includePayload: false\n  logback:\n    rollingpolicy:\n      max-file-size: 50MB\n      max-history: 7\nEOF\n\necho \"Lavalink ${LAVALINK_VERSION} installed with youtube-plugin ${YOUTUBE_PLUGIN_VERSION}, lavasrc ${LAVASRC_VERSION}, lavasearch ${LAVASEARCH_VERSION}\"\n",
+            "container": "ghcr.io/parkervcp/installers:debian",
+            "entrypoint": "bash"
+        }
+    },
+    "variables": [
+        {
+            "name": "Lavalink Version",
+            "description": "Lavalink release tag to install, for example 4.2.2, or latest. Reinstall the server to apply a change.",
+            "env_variable": "LAVALINK_VERSION",
+            "default_value": "4.2.2",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|string|max:20",
+            "field_type": "text"
+        },
+        {
+            "name": "YouTube Plugin Version",
+            "description": "youtube-source plugin version. A release number such as 1.18.2, or a commit hash to use a snapshot build. Reinstall the server to apply a change.",
+            "env_variable": "YOUTUBE_PLUGIN_VERSION",
+            "default_value": "2be8e542d3f6f178e048dca565892684c2e40177",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|string|max:64",
+            "field_type": "text"
+        },
+        {
+            "name": "LavaSrc Version",
+            "description": "LavaSrc plugin version. Reinstall the server to apply a change.",
+            "env_variable": "LAVASRC_VERSION",
+            "default_value": "4.8.3",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|string|max:20",
+            "field_type": "text"
+        },
+        {
+            "name": "LavaSearch Version",
+            "description": "LavaSearch plugin version. Reinstall the server to apply a change.",
+            "env_variable": "LAVASEARCH_VERSION",
+            "default_value": "1.0.0",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|string|max:20",
+            "field_type": "text"
+        },
+        {
+            "name": "Server Password",
+            "description": "Password clients use to connect. Must match NODE_PASSWORD in the bot's environment. Use a long random value.",
+            "env_variable": "LAVALINK_PASSWORD",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|string|min:16|max:256",
+            "field_type": "text"
+        },
+        {
+            "name": "YouTube OAuth Refresh Token",
+            "description": "Refresh token for the TV client. Leave empty on first start to run the device sign-in flow, then copy the token from the console here.",
+            "env_variable": "YOUTUBE_REFRESH_TOKEN",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string|max:512",
+            "field_type": "text"
+        },
+        {
+            "name": "Cipher Server URL",
+            "description": "Base URL of the yt-cipher server, for example http://10.0.0.5:8001.",
+            "env_variable": "YT_CIPHER_URL",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|url|max:255",
+            "field_type": "text"
+        },
+        {
+            "name": "Cipher Server Token",
+            "description": "API_TOKEN configured on the yt-cipher server.",
+            "env_variable": "YT_CIPHER_TOKEN",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string|max:256",
+            "field_type": "text"
+        },
+        {
+            "name": "Enable Spotify",
+            "description": "Enable the LavaSrc Spotify source. Requires the client ID and secret below.",
+            "env_variable": "SPOTIFY_ENABLED",
+            "default_value": "false",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|string|in:true,false",
+            "field_type": "text"
+        },
+        {
+            "name": "Spotify Client ID",
+            "description": "Spotify application client ID.",
+            "env_variable": "SPOTIFY_CLIENT_ID",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string|max:128",
+            "field_type": "text"
+        },
+        {
+            "name": "Spotify Client Secret",
+            "description": "Spotify application client secret.",
+            "env_variable": "SPOTIFY_CLIENT_SECRET",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string|max:128",
+            "field_type": "text"
+        }
+    ]
+}

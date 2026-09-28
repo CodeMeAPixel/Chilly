@@ -120,7 +120,7 @@ All routes live under `/api/v1`. Authenticated routes accept the session cookie 
 
 | Method | Route | Auth |
 | --- | --- | --- |
-| `GET` | `/health`, `/stats` | — |
+| `GET` | `/health`, `/stats`, `/status` | — |
 | `GET` | `/radio/stations`, `/radio/stations/{station}` | — |
 | `GET` | `/auth/login`, `/auth/callback` | — |
 | `POST` | `/auth/logout` | — |
@@ -177,6 +177,8 @@ frontend/
 Both halves ship as small Alpine images that run as a non-root user: the backend exposes port `8080`, the website port `3000`. Only the website needs a public domain; point its `BACKEND_URL` at the backend over the internal network. It runs well on Dokploy, Coolify or plain Docker Compose next to Lavalink, PostgreSQL and AzuraCast. Behind a reverse proxy, set `API_TRUST_PROXY=true` so rate limiting sees the real client IP.
 
 ## Contributing
+
+See [CHANGELOG.md](CHANGELOG.md) for release notes.
 
 Contributions are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) for the development setup, code style and pull request process, and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) for community guidelines. AI coding agents should follow [AGENTS.md](AGENTS.md).
 

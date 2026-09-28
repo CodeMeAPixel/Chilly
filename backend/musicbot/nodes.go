@@ -232,34 +232,36 @@ func (s *NodeSupervisor) migrate(ctx context.Context, player *Player, target dis
 }
 
 type NodeInfo struct {
-	Name            string  `json:"name"`
-	Status          string  `json:"status"`
-	Players         int     `json:"players"`
-	PlayingPlayers  int     `json:"playing_players"`
-	UptimeMs        int64   `json:"uptime_ms"`
-	CPULoad         float64 `json:"cpu_load"`
-	SystemLoad      float64 `json:"system_load"`
-	Cores           int     `json:"cores"`
-	MemoryUsed      int64   `json:"memory_used"`
-	MemoryAllocated int64   `json:"memory_allocated"`
-	FramesSent      int     `json:"frames_sent"`
-	FramesNulled    int     `json:"frames_nulled"`
-	FramesDeficit   int     `json:"frames_deficit"`
+	Name             string  `json:"name"`
+	Status           string  `json:"status"`
+	Players          int     `json:"players"`
+	PlayingPlayers   int     `json:"playing_players"`
+	UptimeMs         int64   `json:"uptime_ms"`
+	CPULoad          float64 `json:"cpu_load"`
+	SystemLoad       float64 `json:"system_load"`
+	Cores            int     `json:"cores"`
+	MemoryUsed       int64   `json:"memory_used"`
+	MemoryAllocated  int64   `json:"memory_allocated"`
+	MemoryReservable int64   `json:"memory_reservable"`
+	FramesSent       int     `json:"frames_sent"`
+	FramesNulled     int     `json:"frames_nulled"`
+	FramesDeficit    int     `json:"frames_deficit"`
 }
 
 func nodeInfo(node disgolink.Node) NodeInfo {
 	stats := node.Stats()
 	info := NodeInfo{
-		Name:            node.Config().Name,
-		Status:          string(node.Status()),
-		Players:         stats.Players,
-		PlayingPlayers:  stats.PlayingPlayers,
-		UptimeMs:        int64(stats.Uptime),
-		CPULoad:         stats.CPU.LavalinkLoad,
-		SystemLoad:      stats.CPU.SystemLoad,
-		Cores:           stats.CPU.Cores,
-		MemoryUsed:      int64(stats.Memory.Used),
-		MemoryAllocated: int64(stats.Memory.Allocated),
+		Name:             node.Config().Name,
+		Status:           string(node.Status()),
+		Players:          stats.Players,
+		PlayingPlayers:   stats.PlayingPlayers,
+		UptimeMs:         int64(stats.Uptime),
+		CPULoad:          stats.CPU.LavalinkLoad,
+		SystemLoad:       stats.CPU.SystemLoad,
+		Cores:            stats.CPU.Cores,
+		MemoryUsed:       int64(stats.Memory.Used),
+		MemoryAllocated:  int64(stats.Memory.Allocated),
+		MemoryReservable: int64(stats.Memory.Reservable),
 	}
 	if stats.FrameStats != nil {
 		info.FramesSent = stats.FrameStats.Sent

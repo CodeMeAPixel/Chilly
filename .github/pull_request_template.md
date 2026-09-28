@@ -26,5 +26,6 @@ Closes #
 - [ ] `bun run lint`, `bun run typecheck` and `bun run build` pass in `frontend/` (if touched)
 - [ ] Tests added or updated for changed behaviour
 - [ ] Docs and `.env.example` files updated
+- [ ] `CHANGELOG.md` updated under `Unreleased` (for user-facing changes)
 - [ ] No secrets, `.env` files or build output committed
 - [ ] The PR title follows Conventional Commits
