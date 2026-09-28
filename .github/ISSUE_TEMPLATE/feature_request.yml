@@ -1,0 +1,32 @@
+name: Feature request
+description: Suggest an idea for Chilly
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem would this solve?
+      description: Describe the situation you're in and why the current behaviour falls short.
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: What would you like to happen?
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you've considered
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Bot / slash commands
+        - Playback
+        - Radio
+        - API
+        - Website / dashboard
+        - Other

@@ -1,0 +1,12 @@
+.env
+.git
+.gitignore
+.vscode
+bin
+logs
+postgres-data
+Lavalink/application.yml
+Lavalink/logs
+Lavalink/plugins
+**/*_test.go
+Dockerfile
