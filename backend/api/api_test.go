@@ -3,6 +3,8 @@ package api
 import (
 	"testing"
 	"time"
+
+	"github.com/disgoorg/disgo/gateway"
 )
 
 func TestSafeRedirect(t *testing.T) {
@@ -80,5 +82,25 @@ func TestStatusTrackerBuckets(t *testing.T) {
 	}
 	if c.buckets[0].start.Equal(base) {
 		t.Fatal("oldest bucket should have been dropped")
+	}
+}
+
+func TestGatewayHealthy(t *testing.T) {
+	cases := []struct {
+		status  gateway.Status
+		latency time.Duration
+		want    bool
+	}{
+		{gateway.StatusReady, 40 * time.Millisecond, true},
+		{gateway.StatusResuming, 40 * time.Millisecond, true},
+		{gateway.StatusResuming, -2 * time.Second, false},
+		{gateway.StatusResuming, 0, false},
+		{gateway.StatusDisconnected, 40 * time.Millisecond, false},
+		{gateway.StatusWaitingForReady, 40 * time.Millisecond, false},
+	}
+	for _, c := range cases {
+		if got := gatewayHealthy(c.status, c.latency); got != c.want {
+			t.Errorf("gatewayHealthy(%s, %s) = %v, want %v", c.status, c.latency, got, c.want)
+		}
 	}
 }

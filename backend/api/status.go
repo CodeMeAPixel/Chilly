@@ -82,13 +82,24 @@ func (s *Server) RunStatus(ctx context.Context) {
 	}
 }
 
+func gatewayHealthy(status gateway.Status, latency time.Duration) bool {
+	switch status {
+	case gateway.StatusReady:
+		return true
+	case gateway.StatusResuming:
+		return latency > 0
+	default:
+		return false
+	}
+}
+
 func (s *Server) sampleStatus(ctx context.Context) {
 	now := time.Now()
 
 	gatewayOK, gatewayDetail := false, "disconnected"
 	if s.bot.Client.HasGateway() {
 		gw := s.bot.Client.Gateway()
-		if gw.Status() == gateway.StatusReady {
+		if gatewayHealthy(gw.Status(), gw.Latency()) {
 			gatewayOK = true
 			gatewayDetail = gw.Latency().Round(time.Millisecond).String() + " latency"
 		} else {
