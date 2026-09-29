@@ -103,4 +103,4 @@ For UI changes, also run the app and look at the affected pages in light and dar
 
 - **All music comes from AzuraCast.** Do not add YouTube, Spotify, SoundCloud or other third-party sources, search providers or plugins. Lavalink only needs its HTTP source; library songs reach it through the signed `/api/v1/media/...` proxy, so `MEDIA_BASE_URL` must be reachable from every node.
 - On startup the bot logs the node's sources and plugins and disables search providers the node cannot serve. Check that log line first when searches fail.
-- `GET /api/v1/status` and the `/status` page show component health. Uptime history is in memory and resets on restart.
+- `GET /api/v1/status` and the `/status` page show component health. Samples are stored in the `status_samples` table for 90 days, and outages open incidents in `status_incidents` automatically after two failed checks.

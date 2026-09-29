@@ -152,6 +152,8 @@ export type NodeInfo = {
   frames_deficit: number;
 };
 
+export type StatusPoint = { start: string; uptime: number | null };
+
 export type StatusComponent = {
   id: string;
   name: string;
@@ -159,7 +161,23 @@ export type StatusComponent = {
   status: "operational" | "down";
   detail: string;
   uptime: number | null;
-  history: { start: string; uptime: number | null }[];
+  uptime_24h: number | null;
+  collecting: boolean;
+  history: StatusPoint[];
+  daily: StatusPoint[];
+};
+
+export type StatusIncident = {
+  id: number;
+  component?: string;
+  component_name?: string;
+  kind: "auto" | "notice" | "maintenance";
+  title: string;
+  message?: string;
+  started_at: string;
+  resolved_at?: string;
+  duration_seconds: number;
+  ongoing: boolean;
 };
 
 export type SystemStatus = {
@@ -167,7 +185,10 @@ export type SystemStatus = {
   checked_at: string;
   tracking_since: string;
   bucket_minutes: number;
+  history_days: number;
   components: StatusComponent[];
+  incidents: StatusIncident[];
+  notices: StatusIncident[];
   nodes: NodeInfo[];
   bot: {
     guilds: number;
@@ -175,6 +196,7 @@ export type SystemStatus = {
     playing: number;
     uptime_seconds: number;
     gateway_latency_ms?: number;
+    listeners?: number;
   };
 };
 
@@ -251,6 +273,17 @@ export type AdminSearchResult = {
   total: number;
   tracks: SearchResult[];
   library: LibraryStatus;
+  source_test?: {
+    ok: boolean;
+    took_ms: number;
+    status?: number;
+    content_type?: string;
+    content_length?: string;
+    content_range?: string;
+    final_url_host?: string;
+    magic?: string;
+    error?: string;
+  };
   playback_test?: {
     node: string;
     track: string;

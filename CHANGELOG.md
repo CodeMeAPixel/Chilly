@@ -53,6 +53,7 @@ Database changes are applied automatically on startup. Existing playlists are ke
 
 #### Website and operations
 
+- A rebuilt status page. Uptime history is stored in PostgreSQL for 90 days with a 24-hour and 90-day view, each station and the music library are tracked as components, each audio node has one card with its location and details, and outages are recorded as incidents automatically. Admins can post announcements and maintenance notices from the admin panel.
 - A brand page with logo downloads, colours, typography and copy, and a bot list template in `docs/bot-listing.md`.
 - Optional `NODE_LOCATION` / `NODE_n_LOCATION` settings, shown on the status page and in the admin panel.
 - A mobile navigation menu for the website and dashboard.

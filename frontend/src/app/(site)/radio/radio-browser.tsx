@@ -284,12 +284,17 @@ function StationCard({ station, listening, onListen }: { station: Station; liste
         )}
       </div>
 
-      <div className="flex items-center gap-1 border-t border-border bg-surface-2/40 px-2 py-1.5">
-        <Button variant={listening ? "primary" : "ghost"} size="sm" onClick={onListen} disabled={!station.online}>
+      <div className="border-t border-border bg-surface-2/40 px-2 py-1.5">
+        <Button
+          variant={listening ? "primary" : "ghost"}
+          size="sm"
+          onClick={onListen}
+          disabled={!station.online}
+          className="w-full"
+        >
           {listening ? <Pause className="h-4 w-4" /> : <Headphones className="h-4 w-4" />}
-          {listening ? "Stop" : "Listen"}
+          {listening ? "Stop listening" : "Listen"}
         </Button>
-        <SendToServer station={station} />
       </div>
     </Card>
   );
@@ -357,7 +362,7 @@ function NowListeningBar({
             className="w-24 accent-(--primary)"
           />
         </div>
-        <SendToServer station={station} compact />
+        <SendToServer station={station} />
         <Button variant="primary" size="icon" onClick={onStop} aria-label="Stop listening" className="h-11 w-11 rounded-2xl">
           <Square className="h-4 w-4 fill-current" />
         </Button>
@@ -366,7 +371,7 @@ function NowListeningBar({
   );
 }
 
-function SendToServer({ station, compact }: { station: Station; compact?: boolean }) {
+function SendToServer({ station }: { station: Station }) {
   const { data: me } = useMe();
   const [open, setOpen] = useState(false);
   const [stay, setStay] = useState(false);
@@ -391,7 +396,7 @@ function SendToServer({ station, compact }: { station: Station; compact?: boolea
         className="inline-flex h-8 items-center gap-1.5 rounded-lg px-3 text-sm text-muted hover:bg-surface-2 hover:text-fg"
         title="Log in to play in your server"
       >
-        <Send className="h-4 w-4" /> {compact ? <span className="hidden sm:inline">Play in server</span> : "Play in my server"}
+        <Send className="h-4 w-4" /> <span className="hidden sm:inline">Play in server</span>
       </a>
     );
   }
@@ -421,10 +426,10 @@ function SendToServer({ station, compact }: { station: Station; compact?: boolea
   return (
     <div ref={ref} className="relative">
       <Button variant="ghost" size="sm" onClick={() => setOpen((v) => !v)} disabled={!station.online} aria-expanded={open}>
-        <Send className="h-4 w-4" /> {compact ? <span className="hidden sm:inline">Play in server</span> : "Play in my server"}
+        <Send className="h-4 w-4" /> <span className="hidden sm:inline">Play in server</span>
       </Button>
       {open && (
-        <div className="absolute right-0 bottom-full z-40 mb-2 w-72 rounded-2xl border border-border bg-surface p-2 shadow-2xl sm:right-auto sm:left-0">
+        <div className="absolute right-0 bottom-full z-40 mb-3 w-72 max-w-[calc(100vw-2rem)] rounded-2xl border border-border bg-surface p-2 shadow-2xl">
           <label className="flex cursor-pointer items-start gap-3 rounded-xl px-3 py-2.5 hover:bg-surface-2">
             <input
               type="checkbox"

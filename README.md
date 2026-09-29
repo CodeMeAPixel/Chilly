@@ -164,6 +164,8 @@ All routes live under `/api/v1`. Authenticated routes accept the session cookie 
 | `GET` | `/admin/suggestions?status=`, `/admin/requests` | Admin |
 | `PATCH` | `/admin/suggestions/{id}` | Admin |
 | `POST` | `/admin/stations/{station}/skip` | Admin |
+| `POST` | `/admin/status/notices`, `/admin/status/incidents/{id}/resolve` | Admin |
+| `DELETE` | `/admin/status/incidents/{id}` | Admin |
 
 Errors use one shape: `{"error": {"code": "...", "message": "..."}}`.
 

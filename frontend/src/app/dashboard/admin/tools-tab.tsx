@@ -81,6 +81,40 @@ export function ToolsTab() {
           </div>
           {result.library.error && <p className="text-xs text-danger">{result.library.error}</p>}
 
+          {result.source_test && (
+            <div
+              className={`rounded-2xl border p-4 text-sm ${
+                result.source_test.ok ? "border-lime/30 bg-lime/10" : "border-danger/30 bg-danger/10"
+              }`}
+            >
+              <p className="flex items-center gap-2 font-medium">
+                {result.source_test.ok ? <CheckCircle2 className="h-4 w-4 text-lime" /> : <XCircle className="h-4 w-4 text-danger" />}
+                {result.source_test.ok ? "Bot can fetch the file from AzuraCast" : "Bot couldn't fetch the file from AzuraCast"}
+                <span className="font-normal text-muted">· {result.source_test.took_ms}ms</span>
+              </p>
+              <dl className="mt-2 grid gap-x-4 gap-y-1 font-mono text-xs sm:grid-cols-[max-content_1fr]">
+                {(
+                  [
+                    ["status", result.source_test.status],
+                    ["content-type", result.source_test.content_type],
+                    ["content-length", result.source_test.content_length],
+                    ["content-range", result.source_test.content_range],
+                    ["served from", result.source_test.final_url_host],
+                    ["first bytes", result.source_test.magic],
+                    ["error", result.source_test.error],
+                  ] as const
+                )
+                  .filter(([, v]) => v !== undefined && v !== "")
+                  .map(([k, v]) => (
+                    <div key={k} className="contents">
+                      <dt className="text-muted">{k}</dt>
+                      <dd className="break-all">{String(v)}</dd>
+                    </div>
+                  ))}
+              </dl>
+            </div>
+          )}
+
           {test && (
             <div
               className={`rounded-2xl border p-4 text-sm ${test.ok ? "border-lime/30 bg-lime/10" : "border-danger/30 bg-danger/10"}`}

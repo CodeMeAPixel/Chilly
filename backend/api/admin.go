@@ -3,6 +3,8 @@ package api
 import (
 	"context"
 	"errors"
+	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"runtime"
@@ -43,6 +45,9 @@ func (s *Server) adminRoutes(mux *http.ServeMux) {
 	mux.Handle("PATCH "+p+"/suggestions/{suggestionID}", s.adminOnly(s.handleAdminReviewSuggestion))
 	mux.Handle("GET "+p+"/requests", s.adminOnly(s.handleAdminRequests))
 	mux.Handle("POST "+p+"/stations/{station}/skip", s.adminOnly(s.handleAdminSkipSong))
+	mux.Handle("POST "+p+"/status/notices", s.adminOnly(s.handleAdminCreateNotice))
+	mux.Handle("POST "+p+"/status/incidents/{incidentID}/resolve", s.adminOnly(s.handleAdminResolveIncident))
+	mux.Handle("DELETE "+p+"/status/incidents/{incidentID}", s.adminOnly(s.handleAdminDeleteIncident))
 }
 
 type adminRadio struct {
@@ -322,6 +327,7 @@ func (s *Server) handleAdminSearch(w http.ResponseWriter, r *http.Request, _ *Se
 
 	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
 	defer cancel()
+	resp["source_test"] = s.sourceTest(ctx, matches[0])
 	started := time.Now()
 	result, err := node.LoadTracks(ctx, s.bot.Media.URL(matches[0].Station, matches[0].ID))
 	test := map[string]any{
@@ -344,6 +350,9 @@ func (s *Server) handleAdminSearch(w http.ResponseWriter, r *http.Request, _ *Se
 		if ex, ok := result.Data.(lavalink.Exception); ok {
 			test["error"] = ex.Message
 			test["cause"] = ex.Cause
+			if ex.CauseStackTrace != "" {
+				test["cause"] = musicbot.Trim(ex.CauseStackTrace, 4000)
+			}
 		}
 	}
 	resp["playback_test"] = test
@@ -419,4 +428,29 @@ func (s *Server) handleAdminSkipSong(w http.ResponseWriter, r *http.Request, ses
 	}
 	slog.Info("admin skipped song", slog.String("station", np.Station.Shortcode), slog.String("admin_id", sess.UserID.String()))
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) sourceTest(ctx context.Context, t musicbot.LibraryTrack) map[string]any {
+	test := map[string]any{"ok": false}
+	started := time.Now()
+	resp, err := s.bot.Radio.Client().PlayFile(ctx, t.Station, t.ID, "bytes=0-15")
+	test["took_ms"] = time.Since(started).Milliseconds()
+	if err != nil {
+		test["error"] = err.Error()
+		return test
+	}
+	defer resp.Body.Close()
+	head := make([]byte, 16)
+	n, _ := io.ReadFull(resp.Body, head)
+	test["status"] = resp.StatusCode
+	test["content_type"] = resp.Header.Get("Content-Type")
+	test["content_length"] = resp.Header.Get("Content-Length")
+	test["content_range"] = resp.Header.Get("Content-Range")
+	test["final_url_host"] = resp.Request.URL.Host
+	test["magic"] = fmt.Sprintf("% x", head[:n])
+	test["ok"] = resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusPartialContent
+	if !test["ok"].(bool) {
+		test["error"] = strings.TrimSpace(string(head[:n]))
+	}
+	return test
 }

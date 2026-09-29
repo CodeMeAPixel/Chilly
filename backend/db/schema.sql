@@ -94,3 +94,29 @@ CREATE TABLE IF NOT EXISTS song_suggestions
 
 CREATE INDEX IF NOT EXISTS song_suggestions_user_idx ON song_suggestions (user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS song_suggestions_open_idx ON song_suggestions (status) WHERE status IN ('pending', 'reviewing');
+
+CREATE TABLE IF NOT EXISTS status_samples
+(
+    component    VARCHAR(100)    NOT NULL,
+    bucket_start TIMESTAMPTZ     NOT NULL,
+    up           INT             NOT NULL DEFAULT 0,
+    total        INT             NOT NULL DEFAULT 0,
+    PRIMARY KEY (component, bucket_start)
+);
+
+CREATE INDEX IF NOT EXISTS status_samples_bucket_idx ON status_samples (bucket_start);
+
+CREATE TABLE IF NOT EXISTS status_incidents
+(
+    id             BIGSERIAL       PRIMARY KEY,
+    component      VARCHAR(100)    NOT NULL DEFAULT '',
+    component_name VARCHAR(255)    NOT NULL DEFAULT '',
+    kind           VARCHAR(20)     NOT NULL,
+    title          VARCHAR(255)    NOT NULL,
+    message        TEXT            NOT NULL DEFAULT '',
+    started_at     TIMESTAMPTZ     NOT NULL DEFAULT now(),
+    resolved_at    TIMESTAMPTZ,
+    created_by     BIGINT
+);
+
+CREATE INDEX IF NOT EXISTS status_incidents_started_idx ON status_incidents (started_at DESC);

@@ -12,6 +12,7 @@ import { LogsTab } from "./logs-tab";
 import { RequestsTab } from "./requests-tab";
 import { ServersTab } from "./servers-tab";
 import { StationControls } from "./station-controls";
+import { StatusNotices } from "./status-notices";
 import { ToolsTab } from "./tools-tab";
 import { formatBytes, formatSeconds } from "./format";
 
@@ -172,6 +173,8 @@ function OverviewTab() {
           </ul>
         )}
       </Card>
+
+      <StatusNotices />
 
       <Card className="overflow-hidden">
         <h2 className="px-5 pt-5 font-display text-lg font-semibold">Audio nodes</h2>
