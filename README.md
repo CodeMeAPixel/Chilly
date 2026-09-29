@@ -103,7 +103,7 @@ Configuration comes from environment variables, or from a `.env` file in the wor
 4. Set `MEDIA_BASE_URL` to an address where Lavalink can reach this bot's API directly, such as `https://api.example.com` or an internal `http://chilly-backend:8080`. Library songs are streamed to Lavalink through signed links on that address, so the website proxy isn't used.
 5. If Lavalink reaches AzuraCast over an internal network, set `AZURACAST_STREAM_BASE_URL`, for example `http://azuracast:80`.
 
-The library is re-synced every `AZURACAST_LIBRARY_SYNC_INTERVAL` (10 minutes by default). Songs present on several stations are listed once. After each sync, playlist songs saved before the switch to AzuraCast are matched to library songs by title and artist, so old playlists start working as their songs are added.
+The library is re-synced every `AZURACAST_LIBRARY_SYNC_INTERVAL` (10 minutes by default). Songs present on several stations are listed once. Use `AZURACAST_LIBRARY_HIDDEN_FOLDERS` (comma separated) to leave folders such as long DJ mixes out of the library; stations still play them. After each sync, playlist songs saved before the switch to AzuraCast are matched to library songs by title and artist, so old playlists start working as their songs are added.
 
 Set `AZURACAST_LYRICS_BACKFILL=true` to fill in missing lyrics automatically. Every `AZURACAST_LYRICS_BACKFILL_INTERVAL` (6 hours by default), Chilly looks up library songs without lyrics on LRCLIB and saves what it finds to AzuraCast, which also writes them into the files' tags. Songs with no lyrics are retried after 30 days.
 

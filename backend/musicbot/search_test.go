@@ -303,3 +303,36 @@ func TestLibraryBrowseAndGroups(t *testing.T) {
 		t.Errorf("unexpected albums %+v", albums)
 	}
 }
+
+func TestLibraryHidesFolders(t *testing.T) {
+	file := func(id int, path string) azuracast.MediaFile {
+		return azuracast.MediaFile{ID: id, SongID: path, Title: path, Artist: "A", Path: path, Length: 100}
+	}
+	lib := NewLibrary(fakeFetcher{"chill": {
+		file(1, "Random Mixes/night.mp3"),
+		file(2, "random mixes/deep/long.mp3"),
+		file(3, "Random Mixes 2/kept.mp3"),
+		file(4, "Other/Random Mixes.mp3"),
+		file(5, "Albums/song.mp3"),
+	}}, func() []string { return []string{"chill"} })
+	lib.HideFolders([]string{" /Random Mixes/ ", ""})
+
+	if err := lib.Sync(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	var kept []int
+	for _, track := range lib.All() {
+		kept = append(kept, track.ID)
+	}
+	if len(kept) != 3 || kept[0] != 3 || kept[1] != 4 || kept[2] != 5 {
+		t.Errorf("expected tracks 3, 4 and 5 to remain, got %v", kept)
+	}
+
+	lib.HideFolders(nil)
+	if err := lib.Sync(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if len(lib.All()) != 5 {
+		t.Error("clearing hidden folders should bring every track back")
+	}
+}

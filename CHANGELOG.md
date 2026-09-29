@@ -36,6 +36,7 @@ Database changes are applied automatically on startup. Existing playlists are ke
 - A music library synced from AzuraCast. `/play`, `/search`, `/list add` and the dashboard search it by song, album, artist or AzuraCast playlist, with instant autocomplete.
 - A signed media proxy (`/api/v1/media/...`) that streams library songs from AzuraCast to Lavalink, including seeking. Configure it with `MEDIA_BASE_URL` and optionally `MEDIA_SIGNING_KEY`.
 - A public tracks page (`/tracks`) to browse every song, artist, album and station playlist, with search, sorting and paging.
+- `AZURACAST_LIBRARY_HIDDEN_FOLDERS` leaves folders, such as long DJ mixes, out of the library while stations keep playing them.
 - Personal playlists hold library songs. Songs saved from other services are matched to the library automatically after each sync; songs that aren't in the library yet are marked and skipped when a playlist plays.
 - Station playlists from AzuraCast are listed on the playlists page, where you can browse their songs and queue them in a server.
 - Lyrics stored on songs in AzuraCast are shown before falling back to LRCLIB, for library songs and station songs.

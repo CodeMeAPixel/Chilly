@@ -70,6 +70,29 @@ type Library struct {
 	lastSync time.Time
 	lastErr  error
 	onSync   []func()
+	hidden   []string
+}
+
+func (l *Library) HideFolders(folders []string) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.hidden = l.hidden[:0]
+	for _, f := range folders {
+		f = strings.Trim(strings.ReplaceAll(strings.TrimSpace(f), "\\", "/"), "/")
+		if f != "" {
+			l.hidden = append(l.hidden, strings.ToLower(f)+"/")
+		}
+	}
+}
+
+func inHiddenFolder(hidden []string, filePath string) bool {
+	p := strings.ToLower(strings.TrimLeft(strings.ReplaceAll(filePath, "\\", "/"), "/"))
+	for _, folder := range hidden {
+		if strings.HasPrefix(p, folder) {
+			return true
+		}
+	}
+	return false
 }
 
 func NewLibrary(fetcher LibraryFetcher, stations func() []string) *Library {
@@ -105,7 +128,11 @@ func (l *Library) Sync(ctx context.Context) error {
 		tracks   []LibraryTrack
 		bySong   = make(map[string]int)
 		failures []error
+		skipped  int
 	)
+	l.mu.RLock()
+	hidden := slices.Clone(l.hidden)
+	l.mu.RUnlock()
 	for _, station := range stations {
 		files, err := l.fetcher.Files(ctx, station)
 		if err != nil {
@@ -113,6 +140,10 @@ func (l *Library) Sync(ctx context.Context) error {
 			continue
 		}
 		for _, f := range files {
+			if inHiddenFolder(hidden, f.Path) {
+				skipped++
+				continue
+			}
 			playlists := make([]string, 0, len(f.Playlists))
 			for _, p := range f.Playlists {
 				playlists = append(playlists, p.Name)
@@ -171,7 +202,7 @@ func (l *Library) Sync(ctx context.Context) error {
 	for _, fn := range hooks {
 		fn()
 	}
-	slog.Info("music library synced", slog.Int("tracks", len(tracks)), slog.Int("stations", len(stations)))
+	slog.Info("music library synced", slog.Int("tracks", len(tracks)), slog.Int("hidden", skipped), slog.Int("stations", len(stations)))
 	return nil
 }
 

@@ -320,6 +320,7 @@ func main() {
 	var library *musicbot.Library
 	if b.Radio != nil {
 		library = musicbot.NewLibrary(b.Radio.Client(), b.Radio.Shortcodes)
+		library.HideFolders(cfg.AzuraCast.LibraryHiddenFolders)
 		b.Media = newMediaSigner(cfg)
 	}
 	b.Searcher = musicbot.NewSearcher(b.Lavalink, library, b.Media)

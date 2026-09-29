@@ -173,6 +173,7 @@ func loadFromEnvironment(cfg *Config) error {
 	cfg.AzuraCast.PollInterval = parseDurationEnv("AZURACAST_POLL_INTERVAL", cfg.AzuraCast.PollInterval)
 	cfg.AzuraCast.StreamBaseURL = strings.TrimRight(getenv("AZURACAST_STREAM_BASE_URL", cfg.AzuraCast.StreamBaseURL), "/")
 	cfg.AzuraCast.LibrarySyncInterval = parseDurationEnv("AZURACAST_LIBRARY_SYNC_INTERVAL", cfg.AzuraCast.LibrarySyncInterval)
+	cfg.AzuraCast.LibraryHiddenFolders = parseStringSliceEnv("AZURACAST_LIBRARY_HIDDEN_FOLDERS", cfg.AzuraCast.LibraryHiddenFolders)
 	cfg.AzuraCast.LyricsBackfill = parseBoolEnv("AZURACAST_LYRICS_BACKFILL", cfg.AzuraCast.LyricsBackfill)
 	cfg.AzuraCast.LyricsBackfillInterval = parseDurationEnv("AZURACAST_LYRICS_BACKFILL_INTERVAL", cfg.AzuraCast.LyricsBackfillInterval)
 
@@ -367,6 +368,7 @@ type AzuraCastConfig struct {
 	StreamBaseURL string        `yaml:"stream_base_url"`
 
 	LibrarySyncInterval    time.Duration `yaml:"library_sync_interval"`
+	LibraryHiddenFolders   []string      `yaml:"library_hidden_folders"`
 	LyricsBackfill         bool          `yaml:"lyrics_backfill"`
 	LyricsBackfillInterval time.Duration `yaml:"lyrics_backfill_interval"`
 }
