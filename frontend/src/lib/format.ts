@@ -44,6 +44,7 @@ export function initials(name: string) {
 }
 
 export const sourceLabels: Record<string, string> = {
+  azuracast: "Chilly Library",
   youtube: "YouTube",
   soundcloud: "SoundCloud",
   spotify: "Spotify",
@@ -53,3 +54,20 @@ export const sourceLabels: Record<string, string> = {
   twitch: "Twitch",
   bandcamp: "Bandcamp",
 };
+
+const relativeFormat = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
+
+export function formatRelative(iso: string) {
+  const seconds = Math.round((new Date(iso).getTime() - Date.now()) / 1000);
+  const units: [Intl.RelativeTimeFormatUnit, number][] = [
+    ["day", 86400],
+    ["hour", 3600],
+    ["minute", 60],
+  ];
+  for (const [unit, size] of units) {
+    if (Math.abs(seconds) >= size) {
+      return relativeFormat.format(Math.round(seconds / size), unit);
+    }
+  }
+  return "just now";
+}

@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { Link2, ListMusic, ListPlus, Loader2, Play, Plus, Search } from "lucide-react";
+import { Disc3, Link2, ListMusic, ListPlus, Loader2, Play, Plus, Search } from "lucide-react";
 import { useEffect, useState } from "react";
 import { TrackArt } from "@/components/track-art";
 import { Button, Card, EmptyState, Input } from "@/components/ui";
@@ -11,14 +11,6 @@ import { cn, formatDuration } from "@/lib/format";
 import type { Playlist, SearchResult } from "@/lib/types";
 
 type Actions = ReturnType<typeof usePlayer>["actions"];
-
-const sources = [
-  { value: "", label: "All" },
-  { value: "youtubemusic", label: "YT Music" },
-  { value: "youtube", label: "YouTube" },
-  { value: "soundcloud", label: "SoundCloud" },
-  { value: "spotify", label: "Spotify" },
-];
 
 const isUrl = (value: string) => /^https?:\/\//i.test(value.trim());
 
@@ -62,16 +54,14 @@ export function AddTracks({ canAdd, actions }: { canAdd: boolean; actions: Actio
 
 function SearchPanel({ canAdd, actions }: { canAdd: boolean; actions: Actions }) {
   const [query, setQuery] = useState("");
-  const [source, setSource] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const debounced = useDebounced(query.trim(), 400);
   const url = isUrl(debounced);
 
   const { data: results, isFetching, error } = useQuery({
-    queryKey: ["search", debounced, source],
+    queryKey: ["search", debounced],
     queryFn: async () => {
-      const params = new URLSearchParams({ q: debounced, limit: "15" });
-      if (source) params.set("source", source);
+      const params = new URLSearchParams({ q: debounced, limit: "20" });
       return (await api<{ results: SearchResult[] }>(`/search?${params}`)).results;
     },
     enabled: debounced.length > 1 && !url,
@@ -92,44 +82,20 @@ function SearchPanel({ canAdd, actions }: { canAdd: boolean; actions: Actions })
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search songs or paste a link"
+            placeholder="Search the library by song, artist or album"
             className="pl-10"
           />
-        </div>
-        <div className="flex flex-wrap gap-1.5">
-          {sources.map((s) => (
-            <button
-              key={s.value}
-              onClick={() => setSource(s.value)}
-              className={cn(
-                "rounded-full border px-3 py-1 text-xs transition cursor-pointer",
-                source === s.value ? "border-primary/40 bg-primary-soft text-fg" : "border-border text-muted hover:text-fg",
-              )}
-            >
-              {s.label}
-            </button>
-          ))}
         </div>
       </div>
 
       <div className="max-h-[480px] flex-1 overflow-y-auto border-t border-border">
         {url ? (
-          <div className="space-y-3 p-4">
-            <p className="flex items-center gap-2 text-sm text-muted">
-              <Link2 className="h-4 w-4" /> Add this link (tracks, albums and playlists work)
-            </p>
-            <div className="flex gap-2">
-              <Button disabled={!canAdd || busy !== null} onClick={() => add("url", { query: debounced })}>
-                {busy === "url" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Add to queue
-              </Button>
-              <Button variant="secondary" disabled={!canAdd || busy !== null} onClick={() => add("url-next", { query: debounced, next: true })}>
-                <ListPlus className="h-4 w-4" /> Play next
-              </Button>
-            </div>
-          </div>
+          <EmptyState icon={<Link2 className="h-6 w-6" />} title="Links aren't supported">
+            Chilly plays songs from its own library. Search by song, artist or album name instead.
+          </EmptyState>
         ) : debounced.length < 2 ? (
           <EmptyState icon={<Search className="h-6 w-6" />} title="Find something to play">
-            Search by song, artist or album.
+            Search Chilly&apos;s library by song, artist or album.
           </EmptyState>
         ) : isFetching && !results ? (
           <div className="flex justify-center p-10 text-muted">
@@ -138,7 +104,7 @@ function SearchPanel({ canAdd, actions }: { canAdd: boolean; actions: Actions })
         ) : error ? (
           <EmptyState title="Search failed">{error.message}</EmptyState>
         ) : !results?.length ? (
-          <EmptyState title="No results">Try a different search or source.</EmptyState>
+          <EmptyState title="Not in the library">Try a different search.</EmptyState>
         ) : (
           <ul className="divide-y divide-border">
             {results.map((result) => (
@@ -147,10 +113,23 @@ function SearchPanel({ canAdd, actions }: { canAdd: boolean; actions: Actions })
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium">{result.title}</p>
                   <p className="truncate text-xs text-muted">
-                    {result.author} · {result.is_stream ? "LIVE" : formatDuration(result.length_ms)}
+                    {[result.author, result.album].filter(Boolean).join(" · ")} · {formatDuration(result.length_ms)}
                   </p>
                 </div>
                 <div className="flex gap-0.5">
+                  {result.album && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
+                      aria-label={`Queue the album ${result.album}`}
+                      title={`Queue the album ${result.album}`}
+                      disabled={!canAdd || busy !== null}
+                      onClick={() => add(`${result.value}-album`, { query: result.album!, type: "album" })}
+                    >
+                      {busy === `${result.value}-album` ? <Loader2 className="h-4 w-4 animate-spin" /> : <Disc3 className="h-4 w-4" />}
+                    </Button>
+                  )}
                   <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Play now" disabled={!canAdd || busy !== null} onClick={() => add(`${result.value}-now`, { query: result.value, play_now: true })}>
                     <Play className="h-4 w-4" />
                   </Button>

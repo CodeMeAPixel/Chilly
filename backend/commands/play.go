@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log/slog"
 	"math/rand"
 	"strings"
 	"time"
@@ -14,8 +13,6 @@ import (
 	"github.com/disgoorg/disgo/handler"
 	"github.com/disgoorg/disgolink/v3/lavalink"
 	"github.com/disgoorg/json"
-	"github.com/disgoorg/lavasearch-plugin"
-	"github.com/disgoorg/lavasrc-plugin"
 	"github.com/disgoorg/snowflake/v2"
 )
 
@@ -40,7 +37,7 @@ type UserData = musicbot.TrackMeta
 
 type PlayOpts struct {
 	Query    any
-	Source   string
+	Kind     string
 	Type     SearchType
 	PlayNext OptBool
 	Loop     OptBool
@@ -84,29 +81,21 @@ func (c *Commands) SearchAutocomplete(e *handler.AutocompleteEvent) error {
 		return e.AutocompleteResult(nil)
 	}
 
-	ctx, cancel := context.WithTimeout(e.Ctx, autocompleteBudget)
-	defer cancel()
-
-	source := e.Data.String("source")
-	searchType, typeOK := e.Data.OptString("type")
-
-	if typeOK && searchType != "" && searchType != "track" {
-		return e.AutocompleteResult(c.lavasearchChoices(ctx, query, source, searchType))
+	kind := e.Data.String("type")
+	if kind == string(musicbot.GroupAlbum) || kind == string(musicbot.GroupArtist) || kind == string(musicbot.GroupPlaylist) {
+		return e.AutocompleteResult(c.groupChoices(query, musicbot.LibraryGroup(kind)))
 	}
 
-	tracks, err := c.Searcher.SearchTracks(ctx, query, source, 20)
-	if err != nil {
-		slog.Debug("autocomplete search failed", slog.String("query", query), slog.Any("error", err))
-	}
-
+	tracks := c.Searcher.Search(query, 25)
 	choices := make([]discord.AutocompleteChoice, 0, len(tracks)+1)
 	for _, track := range tracks {
+		name := musicbot.Trim(track.Title, 60)
+		if track.Artist != "" {
+			name += " — " + musicbot.Trim(track.Artist, 25)
+		}
 		choices = append(choices, discord.AutocompleteChoiceString{
-			Name: choiceName("🎵 %s — %s (%s)",
-				musicbot.Trim(musicbot.TrackTitle(track), 60),
-				musicbot.Trim(track.Info.Author, 20),
-				musicbot.TrackDuration(track)),
-			Value: c.Searcher.Remember(track),
+			Name:  choiceName("🎵 %s (%s)", name, musicbot.FormatTime(lavalink.Duration(track.LengthMs))),
+			Value: track.Key(),
 		})
 	}
 	if len(choices) == 0 {
@@ -115,62 +104,31 @@ func (c *Commands) SearchAutocomplete(e *handler.AutocompleteEvent) error {
 	return e.AutocompleteResult(choices)
 }
 
-func (c *Commands) lavasearchChoices(ctx context.Context, query, source, searchType string) []discord.AutocompleteChoice {
-	prefix := lavalink.SearchType("spsearch")
-	if source == "deezer" {
-		prefix = "dzsearch"
-	}
-
-	node := musicbot.BestNode(c.Lavalink)
-	if node == nil {
-		return []discord.AutocompleteChoice{fallbackChoice(query)}
-	}
-
-	type loaded struct {
-		result *lavasearch.SearchResult
-		err    error
-	}
-	done := make(chan loaded, 1)
-	go func() {
-		result, err := lavasearch.LoadSearch(node.Rest(), prefix.Apply(query), []lavasearch.SearchType{lavasearch.SearchType(searchType)})
-		done <- loaded{result, err}
-	}()
-
-	var res loaded
-	select {
-	case res = <-done:
-	case <-ctx.Done():
-		return []discord.AutocompleteChoice{fallbackChoice(query)}
-	}
-	if res.err != nil || res.result == nil {
-		if res.err != nil && !errors.Is(res.err, lavasearch.ErrEmptySearchResult) {
-			slog.Debug("lavasearch failed", slog.Any("error", res.err))
-		}
-		return []discord.AutocompleteChoice{fallbackChoice(query)}
-	}
-
+func (c *Commands) groupChoices(query string, kind musicbot.LibraryGroup) []discord.AutocompleteChoice {
+	icon := map[musicbot.LibraryGroup]string{musicbot.GroupAlbum: "💿", musicbot.GroupArtist: "🎤", musicbot.GroupPlaylist: "🎧"}[kind]
+	seen := make(map[string]bool)
 	choices := make([]discord.AutocompleteChoice, 0, 25)
-	add := func(name, value string) {
-		if value == "" || len(value) > 100 || len(choices) >= 25 {
-			return
+	for _, track := range c.Searcher.Search(query, 200) {
+		var names []string
+		switch kind {
+		case musicbot.GroupAlbum:
+			names = []string{track.Album}
+		case musicbot.GroupArtist:
+			names = []string{track.Artist}
+		case musicbot.GroupPlaylist:
+			names = track.Playlists
 		}
-		choices = append(choices, discord.AutocompleteChoiceString{Name: name, Value: value})
-	}
-
-	for _, artist := range res.result.Artists {
-		var info lavasrc.PlaylistInfo
-		_ = artist.PluginInfo.Unmarshal(&info)
-		add(choiceName("🎤 %s", artist.Info.Name), info.URL)
-	}
-	for _, album := range res.result.Albums {
-		var info lavasrc.PlaylistInfo
-		_ = album.PluginInfo.Unmarshal(&info)
-		add(choiceName("💿 %s — %s", album.Info.Name, info.Author), info.URL)
-	}
-	for _, playlist := range res.result.Playlists {
-		var info lavasrc.PlaylistInfo
-		_ = playlist.PluginInfo.Unmarshal(&info)
-		add(choiceName("🎧 %s — %s", playlist.Info.Name, info.Author), info.URL)
+		for _, name := range names {
+			if name == "" || seen[strings.ToLower(name)] || len(name) > 100 || len(choices) >= 25 {
+				continue
+			}
+			seen[strings.ToLower(name)] = true
+			label := name
+			if kind == musicbot.GroupAlbum && track.Artist != "" {
+				label += " — " + track.Artist
+			}
+			choices = append(choices, discord.AutocompleteChoiceString{Name: choiceName("%s %s", icon, label), Value: name})
+		}
 	}
 	if len(choices) == 0 {
 		choices = append(choices, fallbackChoice(query))
@@ -190,15 +148,19 @@ func SearchPlaylist(ctx context.Context, playlistId int, c *Commands, userId sno
 		return &lavalink.LoadResult{LoadType: lavalink.LoadTypeEmpty, Data: lavalink.Empty{}}, nil
 	}
 
-	playlist := lavalink.Playlist{
-		Info: lavalink.PlaylistInfo{
-			Name:          dbPlaylist.Name,
-			SelectedTrack: -1,
-		},
-		Tracks: make([]lavalink.Track, 0, len(dbTracks)),
+	tracks, missing, err := c.Searcher.LoadPlaylistTracks(ctx, dbTracks)
+	if err != nil {
+		return nil, err
 	}
-	for _, track := range dbTracks {
-		playlist.Tracks = append(playlist.Tracks, track.Track)
+	if len(tracks) == 0 {
+		return nil, ErrPlaylistNotInLibrary
+	}
+	playlist := lavalink.Playlist{
+		Info:   lavalink.PlaylistInfo{Name: dbPlaylist.Name, SelectedTrack: -1},
+		Tracks: tracks,
+	}
+	if missing > 0 {
+		playlist.PluginInfo = lavalink.RawData(fmt.Sprintf(`{"missing":%d}`, missing))
 	}
 
 	return &lavalink.LoadResult{
@@ -214,7 +176,7 @@ func SearchQuery(ctx context.Context, opts PlayOpts, c *Commands, userId snowfla
 		if !ok {
 			return nil, fmt.Errorf("query should be a string for Lavalink search, got %T", opts.Query)
 		}
-		return c.Searcher.Resolve(ctx, q, opts.Source)
+		return c.Searcher.Resolve(ctx, q, opts.Kind)
 	case PlaylistSearch:
 		q, ok := opts.Query.(int)
 		if !ok {
@@ -237,39 +199,31 @@ func buildTrackEmbed(track lavalink.Track, queued bool, position int) discord.Em
 		Build()
 }
 
-func buildPlaylistEmbed(playlist lavalink.Playlist, requester snowflake.ID) discord.Embed {
-	var (
-		description  string
-		lavasrcInfo  lavasrc.PlaylistInfo
-		thumbnailUrl = ""
-		playlistType = "playlist"
-		numTracks    = len(playlist.Tracks)
-		name         = musicbot.EscapeMarkdown(playlist.Info.Name)
-	)
+var ErrPlaylistNotInLibrary = errors.New("none of the songs in that playlist are in the library yet")
 
-	_ = playlist.PluginInfo.Unmarshal(&lavasrcInfo)
-
-	switch lavasrcInfo.Type {
-	case lavasrc.PlaylistTypeArtist:
-		playlistType = string(lavasrcInfo.Type)
-		thumbnailUrl = lavasrcInfo.ArtworkURL
-		description = fmt.Sprintf("[%s](%s) `%d tracks`\n\n<@%s>",
-			musicbot.EscapeMarkdown(lavasrcInfo.Author), lavasrcInfo.URL, numTracks, requester)
-	case lavasrc.PlaylistTypePlaylist, lavasrc.PlaylistTypeAlbum:
-		playlistType = string(lavasrcInfo.Type)
-		thumbnailUrl = lavasrcInfo.ArtworkURL
-		description = fmt.Sprintf("[%s](%s) `%d track(s)`\n%s\n\n<@%s>",
-			name, lavasrcInfo.URL, numTracks, musicbot.EscapeMarkdown(lavasrcInfo.Author), requester)
-	default:
-		description = fmt.Sprintf("%s `%d tracks`\n\n<@%s>", name, numTracks, requester)
+func buildPlaylistEmbed(playlist lavalink.Playlist, kind string, requester snowflake.ID) discord.Embed {
+	label := "Playlist"
+	switch musicbot.LibraryGroup(kind) {
+	case musicbot.GroupAlbum:
+		label = "Album"
+	case musicbot.GroupArtist:
+		label = "Artist"
 	}
-
-	return discord.NewEmbedBuilder().
+	description := fmt.Sprintf("**%s** `%d tracks`", musicbot.EscapeMarkdown(playlist.Info.Name), len(playlist.Tracks))
+	var extra struct {
+		Missing int `json:"missing"`
+	}
+	if len(playlist.PluginInfo) > 0 && playlist.PluginInfo.Unmarshal(&extra) == nil && extra.Missing > 0 {
+		description += fmt.Sprintf("\n%d song(s) skipped because they aren't in the library yet.", extra.Missing)
+	}
+	builder := discord.NewEmbedBuilder().
 		SetColor(musicbot.ColorMint).
-		SetTitle(strings.ToUpper(playlistType[:1]) + playlistType[1:] + " queued").
-		SetDescription(description).
-		SetThumbnail(thumbnailUrl).
-		Build()
+		SetTitle(label + " queued").
+		SetDescription(fmt.Sprintf("%s\n\n<@%s>", description, requester))
+	if len(playlist.Tracks) > 0 {
+		builder.SetThumbnail(musicbot.TrackArtwork(playlist.Tracks[0]))
+	}
+	return builder.Build()
 }
 
 func updateReply(e *handler.CommandEvent, content string) {
@@ -283,10 +237,7 @@ func updateReply(e *handler.CommandEvent, content string) {
 
 func (c *Commands) voiceErrorMessage(err error) string {
 	var busy *musicbot.BusyError
-	var unavailable *musicbot.SourceUnavailableError
 	switch {
-	case errors.As(err, &unavailable):
-		return unavailable.Error() + "."
 	case errors.As(err, &busy):
 		return fmt.Sprintf("I'm already playing in <#%s>. Join that channel to add tracks.", busy.ChannelID)
 	case errors.Is(err, musicbot.ErrVoiceTimeout):
@@ -314,22 +265,20 @@ func HandlePlay(playOpts PlayOpts, e *handler.CommandEvent, c *Commands) error {
 	result, err := SearchQuery(ctx, playOpts, c, userID)
 	if err != nil {
 		switch {
-		case errors.Is(err, musicbot.ErrSelectionExpired):
-			updateReply(e, "That search result expired, please search again.")
+		case errors.Is(err, musicbot.ErrSelectionExpired), errors.Is(err, musicbot.ErrExternalSource), errors.Is(err, musicbot.ErrLibraryUnavailable):
+			updateReply(e, err.Error()+".")
 			return nil
 		case errors.Is(err, musicbot.ErrPlaylistNotFound):
 			updateReply(e, "Playlist not found.")
+			return nil
+		case errors.Is(err, ErrPlaylistNotInLibrary):
+			updateReply(e, "None of the songs in that playlist are in the library yet. They'll start working as soon as they're added.")
 			return nil
 		case errors.Is(err, musicbot.ErrNoNode):
 			updateReply(e, c.voiceErrorMessage(err))
 			return nil
 		}
-		var unavailable *musicbot.SourceUnavailableError
-		if errors.As(err, &unavailable) {
-			updateReply(e, c.voiceErrorMessage(err))
-			return nil
-		}
-		updateReply(e, "Failed to load that track. Try a different query or source.")
+		updateReply(e, "Failed to load that song. Try again in a moment.")
 		return err
 	}
 
@@ -348,18 +297,18 @@ func HandlePlay(playOpts PlayOpts, e *handler.CommandEvent, c *Commands) error {
 		}
 	case lavalink.Playlist:
 
-		if playOpts.Shuffle != OptFalse {
+		if playOpts.Shuffle == OptTrue || (playOpts.Shuffle == OptUnset && playOpts.Kind != string(musicbot.GroupAlbum)) {
 			rand.Shuffle(len(loadData.Tracks), func(i, j int) {
 				loadData.Tracks[i], loadData.Tracks[j] = loadData.Tracks[j], loadData.Tracks[i]
 			})
 		}
 		tracks = loadData.Tracks
 		meta.PlaylistName = loadData.Info.Name
-		embed = buildPlaylistEmbed(loadData, userID)
+		embed = buildPlaylistEmbed(loadData, playOpts.Kind, userID)
 	}
 
 	if len(tracks) == 0 {
-		updateReply(e, "No matches found for search query.")
+		updateReply(e, "That isn't in the library yet. Try another search, or browse everything on the website.")
 		return nil
 	}
 	tracks = musicbot.WithTrackMeta(tracks, meta)
@@ -457,7 +406,7 @@ func (cmd *Commands) Play(data discord.SlashCommandInteractionData, e *handler.C
 	return HandlePlay(
 		PlayOpts{
 			Query:    data.String("query"),
-			Source:   data.String("source"),
+			Kind:     data.String("type"),
 			Type:     LavalinkSearch,
 			PlayNext: next,
 			Loop:     loop,

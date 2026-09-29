@@ -53,7 +53,7 @@ Chilly turns any voice channel into a radio station. Pick one of our always-on s
 - **True 24/7 mode.** `/247 on` keeps a station playing in your channel forever. No more rejoining the bot every morning.
 - **Listen anywhere.** Every station also plays in your browser at chillybot.space/radio.
 - **A live dashboard.** Switch stations, skip, seek and manage the queue from your browser. Changes show up instantly for everyone.
-- **Your songs, too.** Want something specific? `/play` finds it on YouTube, SoundCloud or Spotify, with lyrics and saved playlists.
+- **Your songs, too.** Want something specific? `/play` any song, album or artist from our library, with lyrics and your own playlists.
 - **Built to stay up.** Redundant audio servers with automatic failover, and a public status page.
 - **Free and open source.** No premium tier, no vote locks, no ads.
 
@@ -74,6 +74,11 @@ Chilly turns any voice channel into a radio station. Pick one of our always-on s
 - `/247 on` — keep a station playing around the clock
 - `/247 off` — turn 24/7 mode off
 - `/247 status` — see the current 24/7 setting
+
+**Requests**
+- `/request` — ask a station to play a song from the library soon
+- `/suggest` — suggest a song for the library; you'll get a DM when it's reviewed
+- `/requests` — see your requests and suggestions
 
 **Music**
 - `/play`, `/search` — play a song, album or playlist
@@ -110,6 +115,6 @@ Chilly never needs Administrator, Manage Server or any moderation permission. Th
 
 **Does it really stay in the channel forever?** With `/247 on`, yes. Chilly rejoins after restarts or disconnects and keeps the station playing until someone runs `/247 off`.
 
-**Can I play my own music?** Yes. `/play` takes a song name or a YouTube, SoundCloud or Spotify link.
+**Can I play specific songs?** Yes. `/play` searches Chilly's music library by song, album or artist. Links from other services aren't supported.
 
 **Where can I see if something is down?** https://chillybot.space/status shows live health for every part of the bot.

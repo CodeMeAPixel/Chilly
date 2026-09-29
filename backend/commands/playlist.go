@@ -12,7 +12,6 @@ import (
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgo/handler"
 	"github.com/disgoorg/disgolink/v3/lavalink"
-	"github.com/disgoorg/lavasrc-plugin"
 )
 
 var playlist = discord.SlashCommandCreate{
@@ -50,7 +49,7 @@ var playlist = discord.SlashCommandCreate{
 			Options: []discord.ApplicationCommandOption{
 				discord.ApplicationCommandOptionString{
 					Name:         "query",
-					Description:  "Search query",
+					Description:  "Song, album, artist or playlist from the library",
 					Required:     true,
 					Autocomplete: true,
 				},
@@ -61,14 +60,8 @@ var playlist = discord.SlashCommandCreate{
 					Autocomplete: true,
 				},
 				discord.ApplicationCommandOptionString{
-					Name:        "source",
-					Description: "Source to search from",
-					Required:    false,
-					Choices:     searchSourceChoices,
-				},
-				discord.ApplicationCommandOptionString{
 					Name:        "type",
-					Description: "Type of search",
+					Description: "What to add (defaults to a song)",
 					Required:    false,
 					Choices:     searchTypeChoices,
 				},
@@ -247,12 +240,13 @@ func (c *Commands) AddPlaylistTrack(data discord.SlashCommandInteractionData, e 
 		return err
 	}
 
-	result, err := c.Searcher.Resolve(ctx, query, data.String("source"))
+	result, err := c.Searcher.Resolve(ctx, query, data.String("type"))
 	if err != nil {
-		updateReply(e, "Failed to load that track.")
-		if errors.Is(err, musicbot.ErrSelectionExpired) {
+		if errors.Is(err, musicbot.ErrSelectionExpired) || errors.Is(err, musicbot.ErrExternalSource) || errors.Is(err, musicbot.ErrLibraryUnavailable) {
+			updateReply(e, err.Error()+".")
 			return nil
 		}
+		updateReply(e, "Failed to load that song.")
 		return err
 	}
 
@@ -271,18 +265,12 @@ func (c *Commands) AddPlaylistTrack(data discord.SlashCommandInteractionData, e 
 		}
 	case lavalink.Playlist:
 		tracks = loadData.Tracks
-		var info lavasrc.PlaylistInfo
-		if err := loadData.PluginInfo.Unmarshal(&info); err == nil && info.URL != "" {
-			description = fmt.Sprintf("Playlist [%s](%s) `%d tracks` added to playlist `%s`",
-				musicbot.EscapeMarkdown(loadData.Info.Name), info.URL, len(loadData.Tracks), playlist.Name)
-		} else {
-			description = fmt.Sprintf("Playlist %s `%d tracks` added to playlist `%s`",
-				musicbot.EscapeMarkdown(loadData.Info.Name), len(loadData.Tracks), playlist.Name)
-		}
+		description = fmt.Sprintf("**%s** `%d tracks` added to playlist `%s`",
+			musicbot.EscapeMarkdown(loadData.Info.Name), len(loadData.Tracks), playlist.Name)
 	}
 
 	if len(tracks) == 0 {
-		updateReply(e, "No matches found for that query.")
+		updateReply(e, "That isn't in the library yet. Try another search.")
 		return nil
 	}
 	if err := c.Db.AddTracksToPlaylist(ctx, playlistID, e.User().ID, tracks); err != nil {

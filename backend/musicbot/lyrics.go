@@ -291,12 +291,30 @@ func (b *Bot) LyricsForTrack(ctx context.Context, track lavalink.Track) (*Lyrics
 		return nil, ErrLyricsNotFound
 	}
 	q := QueryFromTrack(track)
+	var lib *Library
+	if b.Searcher != nil {
+		lib = b.Searcher.Library()
+	}
+	if lib != nil && track.Info.SourceName == LibrarySource {
+		if lt, ok := lib.Get(track.Info.Identifier); ok {
+			if stored := lt.StoredLyrics(); stored != nil {
+				return stored, nil
+			}
+		}
+	}
 	if station := GetTrackMeta(track).Radio; station != "" && b.Radio != nil {
 		np, ok := b.Radio.Station(station)
 		if !ok || np.NowPlaying == nil {
 			return nil, ErrLyricsNotFound
 		}
 		song := np.NowPlaying.Song
+		if lib != nil {
+			if lt, ok := lib.BySongID(song.ID); ok {
+				if stored := lt.StoredLyrics(); stored != nil {
+					return stored, nil
+				}
+			}
+		}
 		q = SongQuery{Title: cleanPart(song.Title), Artist: cleanPart(song.Artist), DurationMs: int64(np.NowPlaying.Duration) * 1000}
 	}
 	return b.Lyrics.Lookup(ctx, q)

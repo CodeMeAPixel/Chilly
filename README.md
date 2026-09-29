@@ -1,6 +1,6 @@
 # Chilly
 
-A self-hosted 24/7 radio bot for Discord, with a web dashboard. It streams your own [AzuraCast](https://www.azuracast.com) stations into voice channels, can keep them playing around the clock, and plays songs on request through [Lavalink](https://lavalink.dev).
+A self-hosted 24/7 radio bot for Discord, with a web dashboard. All music comes from your own [AzuraCast](https://www.azuracast.com) instance: its stations stream into voice channels around the clock, and any song in its library can be played on request. [Lavalink](https://lavalink.dev) is used only to send the audio to Discord.
 
 This repository contains both halves of the project:
 
@@ -14,7 +14,8 @@ This repository contains both halves of the project:
 - **Radio.** Stream AzuraCast stations with `/radio`. Now-playing info updates live and dropped streams reconnect automatically.
 - **24/7 mode.** `/247 on` keeps a station playing in a voice channel even when it's empty. The setting is saved in PostgreSQL, and the bot rejoins and restarts the station after restarts, disconnects or when a song queue runs out.
 - **Web radio.** Browse, search and listen to every station at `/radio` on the website, or send one to a voice channel.
-- **Songs on request.** Play from YouTube, SoundCloud, Spotify, Deezer or Apple Music, depending on the Lavalink plugins you run, with queue control, lyrics and saved playlists.
+- **Requests and suggestions.** Browse the whole library at `/tracks`, request songs onto a station with `/request` or the website, and suggest missing songs with `/suggest`. Suggestions go through a review queue in the admin panel, are marked added automatically when the song appears in the library, and people get a DM and a status on their My requests page.
+- **Songs on request.** `/play` any song, album, artist or playlist from the AzuraCast library, with queue control, lyrics (from the library or LRCLIB) and saved playlists. No third-party streaming services are used.
 - **Dashboard and admin panel.** A live web player for every server, plus an admin area for bot developers with server management, a track lookup tester and recent logs.
 - **Resilient playback.** Multiple Lavalink nodes with automatic failover, voice recovery and a public status page.
 
@@ -82,7 +83,9 @@ Configuration comes from environment variables, or from a `.env` file in the wor
 | `SEARCH_PROVIDERS` | Search sources tried, in order, for plain-text queries |
 | `DB_*` | PostgreSQL connection |
 | `API_*`, `DISCORD_CLIENT_*` | HTTP API, CORS, cookies and OAuth2 |
-| `AZURACAST_*` | Radio integration |
+| `AZURACAST_*` | Stations, the song library and requests |
+| `MEDIA_BASE_URL`, `MEDIA_SIGNING_KEY` | Where Lavalink fetches library songs, and the key used to sign those links |
+| `REQUEST_COOLDOWN`, `REQUEST_MAX_PENDING`, `SUGGESTION_MAX_OPEN` | Per-user limits for requests and suggestions |
 | `LOG_*` | Log level, format and output |
 
 ### Enabling the API
@@ -92,11 +95,17 @@ Configuration comes from environment variables, or from a `.env` file in the wor
 3. Add `<API_PUBLIC_URL>/api/v1/auth/callback` as an OAuth2 redirect URL in the developer portal.
 4. If the dashboard and API are on different subdomains, set `API_COOKIE_DOMAIN` to the parent domain, for example `.example.com`.
 
-### Enabling radio
+### Connecting AzuraCast
 
 1. Set `AZURACAST_ENABLED=true` and `AZURACAST_URL`.
-2. Enable Lavalink's HTTP source by setting `lavalink.server.sources.http: true`.
-3. If Lavalink reaches AzuraCast over an internal network, set `AZURACAST_STREAM_BASE_URL`, for example `http://azuracast:80`.
+2. Create an AzuraCast user for the bot with the **Media** permission on each station (and **Broadcasting** for song skips), create an API key for it and set `AZURACAST_API_KEY`.
+3. Enable Lavalink's HTTP source (`lavalink.server.sources.http: true`). No Lavalink plugins are needed.
+4. Set `MEDIA_BASE_URL` to an address where Lavalink can reach this bot's API directly, such as `https://api.example.com` or an internal `http://chilly-backend:8080`. Library songs are streamed to Lavalink through signed links on that address, so the website proxy isn't used.
+5. If Lavalink reaches AzuraCast over an internal network, set `AZURACAST_STREAM_BASE_URL`, for example `http://azuracast:80`.
+
+The library is re-synced every `AZURACAST_LIBRARY_SYNC_INTERVAL` (10 minutes by default). Songs present on several stations are listed once. After each sync, playlist songs saved before the switch to AzuraCast are matched to library songs by title and artist, so old playlists start working as their songs are added.
+
+Set `AZURACAST_LYRICS_BACKFILL=true` to fill in missing lyrics automatically. Every `AZURACAST_LYRICS_BACKFILL_INTERVAL` (6 hours by default), Chilly looks up library songs without lyrics on LRCLIB and saves what it finds to AzuraCast, which also writes them into the files' tags. Songs with no lyrics are retried after 30 days.
 
 ## Commands
 
@@ -104,6 +113,7 @@ Configuration comes from environment variables, or from a `.env` file in the wor
 | --- | --- |
 | `/radio play`, `/radio now`, `/radio stations` | AzuraCast radio (when enabled) |
 | `/247 on`, `/247 off`, `/247 status` | Keep a station playing 24/7 (Manage Server, when radio is enabled) |
+| `/request`, `/suggest`, `/requests` | Request a library song on a station, suggest a missing song, and see your requests |
 | `/play`, `/search` | Play a track, album or playlist from a query or URL |
 | `/playlist` | Play one of your saved playlists |
 | `/queue`, `/now` | Show the queue or the current track |
@@ -123,6 +133,9 @@ All routes live under `/api/v1`. Authenticated routes accept the session cookie 
 | --- | --- | --- |
 | `GET` | `/health`, `/stats`, `/status` | — |
 | `GET` | `/radio/stations`, `/radio/stations/{station}` | — |
+| `GET` | `/media/{station}/{mediaId}?sig=` (used by Lavalink) | Signed link |
+| `GET` | `/library/playlists`, `/library/playlists/tracks?name=` | — |
+| `GET` | `/library/tracks?q=&artist=&album=&playlist=&sort=&page=`, `/library/artists`, `/library/albums`, `/library/summary` | — |
 | `GET` | `/auth/login`, `/auth/callback` | — |
 | `POST` | `/auth/logout` | — |
 | `GET` | `/auth/me` | ✓ |
@@ -136,13 +149,21 @@ All routes live under `/api/v1`. Authenticated routes accept the session cookie 
 | `POST` | `/guilds/{id}/queue/move` | ✓ |
 | `DELETE` | `/guilds/{id}/queue/{index}` | ✓ |
 | `POST` | `/guilds/{id}/radio` | ✓ |
+| `POST` | `/requests` | ✓ |
+| `GET` | `/me/requests` | ✓ |
+| `POST` | `/suggestions` | ✓ |
+| `DELETE` | `/suggestions/{id}` (pending only) | ✓ |
 | `GET`, `PUT`, `DELETE` | `/guilds/{id}/radio/247` | ✓ (changes need Manage Server) |
+| `POST` | `/guilds/{id}/radio/step` | ✓ |
 | `GET`, `POST` | `/playlists` | ✓ |
 | `GET`, `PATCH`, `DELETE` | `/playlists/{id}` | ✓ |
 | `POST` | `/playlists/{id}/tracks` | ✓ |
 | `DELETE` | `/playlists/{id}/tracks/{trackId}` | ✓ |
 | `GET` | `/admin/overview`, `/admin/guilds`, `/admin/guilds/{id}`, `/admin/logs` | Admin |
 | `POST` | `/admin/guilds/{id}/disconnect`, `/move`, `/leave`, `/admin/search` | Admin |
+| `GET` | `/admin/suggestions?status=`, `/admin/requests` | Admin |
+| `PATCH` | `/admin/suggestions/{id}` | Admin |
+| `POST` | `/admin/stations/{station}/skip` | Admin |
 
 Errors use one shape: `{"error": {"code": "...", "message": "..."}}`.
 

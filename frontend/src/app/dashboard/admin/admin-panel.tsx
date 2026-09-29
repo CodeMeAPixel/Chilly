@@ -9,13 +9,16 @@ import { api } from "@/lib/api";
 import { cn, formatNumber } from "@/lib/format";
 import type { AdminOverview } from "@/lib/types";
 import { LogsTab } from "./logs-tab";
+import { RequestsTab } from "./requests-tab";
 import { ServersTab } from "./servers-tab";
+import { StationControls } from "./station-controls";
 import { ToolsTab } from "./tools-tab";
 import { formatBytes, formatSeconds } from "./format";
 
 const tabs = [
   { id: "overview", label: "Overview" },
   { id: "servers", label: "Servers" },
+  { id: "requests", label: "Requests" },
   { id: "tools", label: "Tools" },
   { id: "logs", label: "Logs" },
 ] as const;
@@ -65,6 +68,7 @@ export function AdminPanel() {
 
       {tab === "overview" && <OverviewTab />}
       {tab === "servers" && <ServersTab />}
+      {tab === "requests" && <RequestsTab />}
       {tab === "tools" && <ToolsTab />}
       {tab === "logs" && <LogsTab />}
     </div>
@@ -134,6 +138,23 @@ function OverviewTab() {
             {data.radio.last_poll && ` · last poll ${new Date(data.radio.last_poll).toLocaleTimeString()}`}
           </p>
         )}
+        <p className="mt-1 text-sm text-muted">
+          {data.library.enabled
+            ? `Library: ${formatNumber(data.library.tracks)} songs${
+                data.library.last_sync ? ` · synced ${new Date(data.library.last_sync).toLocaleTimeString()}` : " · not synced yet"
+              }`
+            : "Library: disabled (needs AzuraCast, an API key and MEDIA_BASE_URL)"}
+        </p>
+        {data.library.error && <p className="mt-1 text-xs text-danger">{data.library.error}</p>}
+        <p className="mt-1 text-sm text-muted">
+          {data.lyrics_backfill.enabled
+            ? `Lyrics backfill: ${data.lyrics_backfill.written} saved, ${data.lyrics_backfill.not_found} not found, ${data.lyrics_backfill.pending} waiting${
+                data.lyrics_backfill.last_run ? ` · last run ${new Date(data.lyrics_backfill.last_run).toLocaleTimeString()}` : " · first run pending"
+              }`
+            : "Lyrics backfill: off (set AZURACAST_LYRICS_BACKFILL=true)"}
+        </p>
+        {data.lyrics_backfill.last_error && <p className="mt-1 text-xs text-danger">{data.lyrics_backfill.last_error}</p>}
+        {data.radio.enabled && <StationControls />}
         {data.stays.length > 0 && (
           <ul className="mt-4 divide-y divide-border rounded-2xl border border-border">
             {data.stays.map((stay) => (
@@ -155,7 +176,7 @@ function OverviewTab() {
       <Card className="overflow-hidden">
         <h2 className="px-5 pt-5 font-display text-lg font-semibold">Audio nodes</h2>
         <div className="mt-3 overflow-x-auto">
-          <table className="w-full min-w-[640px] text-sm">
+          <table className="w-full min-w-160 text-sm">
             <thead className="text-left text-xs text-muted">
               <tr className="border-b border-border">
                 <th className="px-5 py-2 font-medium">Node</th>

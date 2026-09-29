@@ -84,6 +84,7 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.Handle("GET "+p+"/guilds/{guildID}/radio/247", s.authed(s.handleGetStay))
 	mux.Handle("PUT "+p+"/guilds/{guildID}/radio/247", s.authed(s.handleEnableStay))
 	mux.Handle("DELETE "+p+"/guilds/{guildID}/radio/247", s.authed(s.handleDisableStay))
+	mux.Handle("POST "+p+"/guilds/{guildID}/radio/step", s.authed(s.handleStepStation))
 
 	mux.Handle("GET "+p+"/playlists", s.authed(s.handleListPlaylists))
 	mux.Handle("POST "+p+"/playlists", s.authed(s.handleCreatePlaylist))
@@ -93,6 +94,18 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.Handle("POST "+p+"/playlists/{playlistID}/tracks", s.authed(s.handleAddPlaylistTracks))
 	mux.Handle("DELETE "+p+"/playlists/{playlistID}/tracks/{trackID}", s.authed(s.handleRemovePlaylistTrack))
 
+	mux.HandleFunc("GET "+p+"/media/{station}/{mediaID}", s.handleMedia)
+	mux.HandleFunc("GET "+p+"/library/playlists", s.handleLibraryPlaylists)
+	mux.HandleFunc("GET "+p+"/library/playlists/tracks", s.handleLibraryPlaylistTracks)
+	mux.HandleFunc("GET "+p+"/library/tracks", s.handleLibraryTracks)
+	mux.HandleFunc("GET "+p+"/library/artists", s.handleLibraryGroups(musicbot.GroupArtist))
+	mux.HandleFunc("GET "+p+"/library/albums", s.handleLibraryGroups(musicbot.GroupAlbum))
+	mux.HandleFunc("GET "+p+"/library/summary", s.handleLibrarySummary)
+
+	mux.Handle("POST "+p+"/requests", s.authed(s.handleCreateRequest))
+	mux.Handle("GET "+p+"/me/requests", s.authed(s.handleMyRequests))
+	mux.Handle("POST "+p+"/suggestions", s.authed(s.handleCreateSuggestion))
+	mux.Handle("DELETE "+p+"/suggestions/{suggestionID}", s.authed(s.handleWithdrawSuggestion))
 	mux.HandleFunc("GET "+p+"/radio/stations", s.handleRadioStations)
 	mux.HandleFunc("GET "+p+"/radio/stations/{station}", s.handleRadioStation)
 

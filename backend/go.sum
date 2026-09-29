@@ -8,10 +8,6 @@ github.com/disgoorg/disgolink/v3 v3.1.0 h1:IwhycUfvw87VbvvNSwBcdGMQNSFvNQ7/AQofm
 github.com/disgoorg/disgolink/v3 v3.1.0/go.mod h1:UjHfrC4NT4vzibG3GyqtY5l3aMzFwfkU+B3RiW3AQQ8=
 github.com/disgoorg/json v1.2.0 h1:6e/j4BCfSHIvucG1cd7tJPAOp1RgnnMFSqkvZUtEd1Y=
 github.com/disgoorg/json v1.2.0/go.mod h1:BHDwdde0rpQFDVsRLKhma6Y7fTbQKub/zdGO5O9NqqA=
-github.com/disgoorg/lavasearch-plugin v1.0.0 h1:Fdv6LdtXfE/F8mLHFAdAR4ksOxgHpysgj4pCU8H4nEI=
-github.com/disgoorg/lavasearch-plugin v1.0.0/go.mod h1:SjlXMsCmXImKOKVYpElcr8Ogbwt7L1BGYemCwt+Ld4I=
-github.com/disgoorg/lavasrc-plugin v1.0.0 h1:FMQ8igQgIeP9rWX+YxjMtJCrWz8nCY0kLb2c/6n0Dpo=
-github.com/disgoorg/lavasrc-plugin v1.0.0/go.mod h1:6iwaxvGe07SsooplOHO7cZKnJaL2aeH95UpHHR6TIiM=
 github.com/disgoorg/snowflake/v2 v2.0.3 h1:3B+PpFjr7j4ad7oeJu4RlQ+nYOTadsKapJIzgvSI2Ro=
 github.com/disgoorg/snowflake/v2 v2.0.3/go.mod h1:W6r7NUA7DwfZLwr00km6G4UnZ0zcoLBRufhkFWgAc4c=
 github.com/gorilla/websocket v1.5.3 h1:saDtZ6Pbx/0u+bgYQ3q96pZgCzfhKXGPqt7kZ72aNNg=

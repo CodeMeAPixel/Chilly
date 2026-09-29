@@ -17,9 +17,8 @@ type TrackMeta struct {
 	PlaylistName string       `json:"playlistName,omitempty"`
 	PlaylistURL  string       `json:"playlistUrl,omitempty"`
 
-	Radio    string `json:"radio,omitempty"`
-	Fallback bool   `json:"fallback,omitempty"`
-	PlayID   string `json:"playId,omitempty"`
+	Radio  string `json:"radio,omitempty"`
+	PlayID string `json:"playId,omitempty"`
 }
 
 func GetTrackMeta(track lavalink.Track) TrackMeta {

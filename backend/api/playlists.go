@@ -13,10 +13,25 @@ import (
 )
 
 type playlistTrackView struct {
-	ID      int                `json:"id"`
-	AddedAt time.Time          `json:"added_at"`
-	AddedBy string             `json:"added_by"`
-	Track   musicbot.TrackView `json:"track"`
+	ID        int                `json:"id"`
+	AddedAt   time.Time          `json:"added_at"`
+	AddedBy   string             `json:"added_by"`
+	Track     musicbot.TrackView `json:"track"`
+	Available bool               `json:"available"`
+	Album     string             `json:"album,omitempty"`
+}
+
+func (s *Server) playlistTrackView(t musicbot.PlaylistTrack) playlistTrackView {
+	view := playlistTrackView{ID: t.ID, AddedAt: t.AddedAt, AddedBy: t.AddedBy.String(), Track: musicbot.NewTrackView(t.Track)}
+	if lib := s.bot.Searcher.Library(); lib != nil && t.LibraryKey != "" {
+		if lt, ok := lib.Get(t.LibraryKey); ok {
+			view.Track = newLibraryResult(lt).TrackView
+			view.Album = lt.Album
+			view.Available = true
+		}
+	}
+	view.Track.URI = ""
+	return view
 }
 
 func playlistID(w http.ResponseWriter, r *http.Request) (int, bool) {
@@ -87,10 +102,14 @@ func (s *Server) handleGetPlaylist(w http.ResponseWriter, r *http.Request, sess 
 		return
 	}
 	views := make([]playlistTrackView, len(tracks))
+	available := 0
 	for i, t := range tracks {
-		views[i] = playlistTrackView{ID: t.ID, AddedAt: t.AddedAt, AddedBy: t.AddedBy.String(), Track: musicbot.NewTrackView(t.Track)}
+		views[i] = s.playlistTrackView(t)
+		if views[i].Available {
+			available++
+		}
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"playlist": playlist, "tracks": views})
+	writeJSON(w, http.StatusOK, map[string]any{"playlist": playlist, "tracks": views, "available": available})
 }
 
 func (s *Server) handleRenamePlaylist(w http.ResponseWriter, r *http.Request, sess *Session) {
@@ -133,8 +152,8 @@ func (s *Server) handleAddPlaylistTracks(w http.ResponseWriter, r *http.Request,
 		return
 	}
 	var req struct {
-		Query  string `json:"query"`
-		Source string `json:"source"`
+		Query string `json:"query"`
+		Type  string `json:"type"`
 	}
 	if !decodeJSON(w, r, &req) {
 		return
@@ -151,7 +170,7 @@ func (s *Server) handleAddPlaylistTracks(w http.ResponseWriter, r *http.Request,
 		s.playlistError(w, err)
 		return
 	}
-	result, err := s.bot.Searcher.Resolve(ctx, req.Query, req.Source)
+	result, err := s.bot.Searcher.Resolve(ctx, req.Query, req.Type)
 	if err != nil {
 		s.playerError(w, err)
 		return

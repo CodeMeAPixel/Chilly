@@ -5,31 +5,10 @@ import (
 )
 
 var searchTypeChoices = []discord.ApplicationCommandOptionChoiceString{
-	{
-		Name:  "Track",
-		Value: "track",
-	},
-	{
-		Name:  "Album",
-		Value: "album",
-	},
-	{
-		Name:  "Artist",
-		Value: "artist",
-	},
-	{
-		Name:  "Playlist",
-		Value: "playlist",
-	},
-}
-
-var searchSourceChoices = []discord.ApplicationCommandOptionChoiceString{
-	{Name: "YouTube", Value: "youtube"},
-	{Name: "YouTube Music", Value: "youtubemusic"},
-	{Name: "SoundCloud", Value: "soundcloud"},
-	{Name: "Spotify", Value: "spotify"},
-	{Name: "Deezer", Value: "deezer"},
-	{Name: "Apple Music", Value: "applemusic"},
+	{Name: "Song", Value: "track"},
+	{Name: "Album", Value: "album"},
+	{Name: "Artist", Value: "artist"},
+	{Name: "Playlist", Value: "playlist"},
 }
 
 var loopModeChoices = []discord.ApplicationCommandOptionChoiceString{
@@ -53,54 +32,17 @@ var music = discord.SlashCommandCreate{
 	Options: []discord.ApplicationCommandOption{
 		discord.ApplicationCommandOptionSubCommand{
 			Name:        "play",
-			Description: "Play a song from query",
-			Options: []discord.ApplicationCommandOption{
-				discord.ApplicationCommandOptionString{
-					Name:        "query",
-					Description: "Search query or URL",
-					Required:    true,
-				},
-				discord.ApplicationCommandOptionString{
-					Name:        "source",
-					Description: "The source to search from (defaults to the configured providers)",
-					Required:    false,
-					Choices:     searchSourceChoices,
-				},
-				discord.ApplicationCommandOptionBool{
-					Name:        "next",
-					Description: "Play next instead of adding to the end of the queue",
-					Required:    false,
-				},
-				discord.ApplicationCommandOptionBool{
-					Name:        "loop",
-					Description: "Enable loop for query",
-					Required:    false,
-				},
-				discord.ApplicationCommandOptionBool{
-					Name:        "shuffle",
-					Description: "Enable shuffle for query",
-					Required:    false,
-				},
-			}},
-		discord.ApplicationCommandOptionSubCommand{
-			Name:        "search",
-			Description: "Add & play track/playlist from search results",
+			Description: "Play a song, album, artist or playlist from the library",
 			Options: []discord.ApplicationCommandOption{
 				discord.ApplicationCommandOptionString{
 					Name:         "query",
-					Description:  "Search query for track",
+					Description:  "Song, album, artist or playlist name",
 					Required:     true,
 					Autocomplete: true,
 				},
 				discord.ApplicationCommandOptionString{
-					Name:        "source",
-					Description: "The source to search from",
-					Required:    false,
-					Choices:     searchSourceChoices,
-				},
-				discord.ApplicationCommandOptionString{
 					Name:        "type",
-					Description: "The type of the search",
+					Description: "What to look for (defaults to a song)",
 					Required:    false,
 					Choices:     searchTypeChoices,
 				},
@@ -111,12 +53,34 @@ var music = discord.SlashCommandCreate{
 				},
 				discord.ApplicationCommandOptionBool{
 					Name:        "loop",
-					Description: "Enable loop for query",
+					Description: "Loop the queue",
 					Required:    false,
 				},
 				discord.ApplicationCommandOptionBool{
 					Name:        "shuffle",
-					Description: "Enable shuffle for query",
+					Description: "Shuffle what gets added",
+					Required:    false,
+				},
+			}},
+		discord.ApplicationCommandOptionSubCommand{
+			Name:        "search",
+			Description: "Search the library and pick the exact song",
+			Options: []discord.ApplicationCommandOption{
+				discord.ApplicationCommandOptionString{
+					Name:         "query",
+					Description:  "Song, album, artist or playlist name",
+					Required:     true,
+					Autocomplete: true,
+				},
+				discord.ApplicationCommandOptionString{
+					Name:        "type",
+					Description: "What to look for (defaults to a song)",
+					Required:    false,
+					Choices:     searchTypeChoices,
+				},
+				discord.ApplicationCommandOptionBool{
+					Name:        "next",
+					Description: "Play next instead of adding to the end of the queue",
 					Required:    false,
 				},
 			}},

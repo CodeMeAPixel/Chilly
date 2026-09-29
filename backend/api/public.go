@@ -64,6 +64,32 @@ func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, resp)
 }
 
+type libraryResult struct {
+	musicbot.TrackView
+
+	Value     string   `json:"value"`
+	Album     string   `json:"album,omitempty"`
+	Station   string   `json:"station"`
+	Playlists []string `json:"playlists,omitempty"`
+}
+
+func newLibraryResult(t musicbot.LibraryTrack) libraryResult {
+	return libraryResult{
+		TrackView: musicbot.TrackView{
+			Title:      t.Title,
+			Author:     t.Artist,
+			ArtworkURL: t.ArtURL,
+			SourceName: musicbot.LibrarySource,
+			Identifier: t.Key(),
+			LengthMs:   t.LengthMs,
+		},
+		Value:     t.Key(),
+		Album:     t.Album,
+		Station:   t.Station,
+		Playlists: t.Playlists,
+	}
+}
+
 func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request, _ *Session) {
 	q := r.URL.Query()
 	query := q.Get("q")
@@ -76,22 +102,10 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request, _ *Session
 		limit = 20
 	}
 
-	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
-	defer cancel()
-	tracks, err := s.bot.Searcher.SearchTracks(ctx, query, q.Get("source"), limit)
-	if err != nil && len(tracks) == 0 {
-		s.playerError(w, err)
-		return
-	}
-
-	type result struct {
-		musicbot.TrackView
-
-		Value string `json:"value"`
-	}
-	results := make([]result, len(tracks))
+	tracks := s.bot.Searcher.Search(query, limit)
+	results := make([]libraryResult, len(tracks))
 	for i, t := range tracks {
-		results[i] = result{TrackView: musicbot.NewTrackView(t), Value: s.bot.Searcher.Remember(t)}
+		results[i] = newLibraryResult(t)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"results": results})
 }

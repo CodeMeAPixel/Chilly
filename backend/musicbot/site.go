@@ -28,14 +28,15 @@ func (b *Bot) SiteHost() string {
 }
 
 var sourceLabels = map[string]string{
-	"youtube":    "YouTube",
-	"soundcloud": "SoundCloud",
-	"spotify":    "Spotify",
-	"deezer":     "Deezer",
-	"applemusic": "Apple Music",
-	"bandcamp":   "Bandcamp",
-	"twitch":     "Twitch",
-	"http":       "Stream",
+	LibrarySource: "Chilly Library",
+	"youtube":     "YouTube",
+	"soundcloud":  "SoundCloud",
+	"spotify":     "Spotify",
+	"deezer":      "Deezer",
+	"applemusic":  "Apple Music",
+	"bandcamp":    "Bandcamp",
+	"twitch":      "Twitch",
+	"http":        "Stream",
 }
 
 func SourceLabel(name string) string {

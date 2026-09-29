@@ -208,13 +208,12 @@ func (s *Server) handlePlayerUpdate(w http.ResponseWriter, r *http.Request, sess
 }
 
 func (s *Server) playerError(w http.ResponseWriter, err error) {
-	var (
-		busy        *musicbot.BusyError
-		unavailable *musicbot.SourceUnavailableError
-	)
+	var busy *musicbot.BusyError
 	switch {
-	case errors.As(err, &unavailable):
-		writeError(w, http.StatusUnprocessableEntity, "source_unavailable", err.Error())
+	case errors.Is(err, musicbot.ErrExternalSource):
+		writeError(w, http.StatusUnprocessableEntity, "external_source", err.Error())
+	case errors.Is(err, musicbot.ErrLibraryUnavailable):
+		writeError(w, http.StatusServiceUnavailable, "library_unavailable", err.Error())
 	case errors.Is(err, musicbot.ErrNothingPlaying):
 		writeError(w, http.StatusConflict, "not_playing", "nothing is playing")
 	case errors.As(err, &busy):
@@ -271,7 +270,7 @@ func (s *Server) handleStop(w http.ResponseWriter, r *http.Request, sess *Sessio
 
 type enqueueRequest struct {
 	Query      string `json:"query"`
-	Source     string `json:"source"`
+	Type       string `json:"type"`
 	PlaylistID int    `json:"playlist_id"`
 	Next       bool   `json:"next"`
 	PlayNow    bool   `json:"play_now"`
@@ -310,7 +309,10 @@ func (s *Server) handleEnqueue(w http.ResponseWriter, r *http.Request, sess *Ses
 	defer cancel()
 
 	meta := musicbot.TrackMeta{Requester: sess.UserID}
-	var tracks []lavalink.Track
+	var (
+		tracks  []lavalink.Track
+		missing int
+	)
 
 	if req.PlaylistID != 0 {
 		playlist, dbTracks, err := s.bot.Db.GetPlaylist(ctx, sess.UserID, req.PlaylistID)
@@ -318,12 +320,14 @@ func (s *Server) handleEnqueue(w http.ResponseWriter, r *http.Request, sess *Ses
 			s.playerError(w, err)
 			return
 		}
-		for _, t := range dbTracks {
-			tracks = append(tracks, t.Track)
+		tracks, missing, err = s.bot.Searcher.LoadPlaylistTracks(ctx, dbTracks)
+		if err != nil {
+			s.playerError(w, err)
+			return
 		}
 		meta.PlaylistName = playlist.Name
 	} else {
-		result, err := s.bot.Searcher.Resolve(ctx, req.Query, req.Source)
+		result, err := s.bot.Searcher.Resolve(ctx, req.Query, req.Type)
 		if err != nil {
 			s.playerError(w, err)
 			return
@@ -341,7 +345,7 @@ func (s *Server) handleEnqueue(w http.ResponseWriter, r *http.Request, sess *Ses
 		}
 	}
 	if len(tracks) == 0 {
-		writeError(w, http.StatusNotFound, "no_results", "no tracks found")
+		writeError(w, http.StatusNotFound, "no_results", "that isn't in the library yet")
 		return
 	}
 	if req.Shuffle {
@@ -360,9 +364,10 @@ func (s *Server) handleEnqueue(w http.ResponseWriter, r *http.Request, sess *Ses
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"added":  len(tracks),
-		"tracks": musicbot.NewTrackViews(tracks[:min(len(tracks), 50)]),
-		"player": s.snapshot(a, queueLimit(r)),
+		"added":   len(tracks),
+		"missing": missing,
+		"tracks":  musicbot.NewTrackViews(tracks[:min(len(tracks), 50)]),
+		"player":  s.snapshot(a, queueLimit(r)),
 	})
 }
 

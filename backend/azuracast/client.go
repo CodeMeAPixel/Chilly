@@ -1,6 +1,7 @@
 package azuracast
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -8,6 +9,8 @@ import (
 	"math"
 	"net/http"
 	"net/url"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -15,13 +18,15 @@ type Client struct {
 	baseURL string
 	apiKey  string
 	http    *http.Client
+	stream  *http.Client
 }
 
 func NewClient(baseURL, apiKey string) *Client {
 	return &Client{
 		baseURL: baseURL,
 		apiKey:  apiKey,
-		http:    &http.Client{Timeout: 10 * time.Second},
+		http:    &http.Client{Timeout: 30 * time.Second},
+		stream:  &http.Client{},
 	}
 }
 
@@ -31,6 +36,7 @@ func (c *Client) get(ctx context.Context, path string, out any) error {
 		return err
 	}
 	req.Header.Set("Accept", "application/json")
+	req.Header.Set("User-Agent", userAgent)
 	if c.apiKey != "" {
 		req.Header.Set("X-API-Key", c.apiKey)
 	}
@@ -157,5 +163,152 @@ func (s *Seconds) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	*s = Seconds(math.Round(value))
+	return nil
+}
+
+type MediaPlaylist struct {
+	ID        int    `json:"id"`
+	Name      string `json:"name"`
+	ShortName string `json:"short_name"`
+}
+
+type MediaFile struct {
+	ID        int             `json:"id"`
+	UniqueID  string          `json:"unique_id"`
+	SongID    string          `json:"song_id"`
+	Title     string          `json:"title"`
+	Artist    string          `json:"artist"`
+	Album     string          `json:"album"`
+	Genre     string          `json:"genre"`
+	Lyrics    *string         `json:"lyrics"`
+	Art       string          `json:"art"`
+	Length    Seconds         `json:"length"`
+	Path      string          `json:"path"`
+	Playlists []MediaPlaylist `json:"playlists"`
+}
+
+func (c *Client) Files(ctx context.Context, station string) ([]MediaFile, error) {
+	var out []MediaFile
+	if err := c.get(ctx, "/api/station/"+url.PathEscape(station)+"/files", &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *Client) PlayFile(ctx context.Context, station string, id int, rangeHeader string) (*http.Response, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
+		c.baseURL+"/api/station/"+url.PathEscape(station)+"/file/"+strconv.Itoa(id)+"/play", nil)
+	if err != nil {
+		return nil, err
+	}
+	if c.apiKey != "" {
+		req.Header.Set("X-API-Key", c.apiKey)
+	}
+	req.Header.Set("User-Agent", userAgent)
+	if rangeHeader != "" {
+		req.Header.Set("Range", rangeHeader)
+	}
+	return c.stream.Do(req)
+}
+
+type StatusError struct {
+	Status int
+	Body   string
+}
+
+func (e *StatusError) Error() string {
+	return fmt.Sprintf("azuracast returned %d: %s", e.Status, e.Body)
+}
+
+func (c *Client) UpdateLyrics(ctx context.Context, station string, id int, lyrics string) error {
+	body, err := json.Marshal(map[string]string{"lyrics": lyrics})
+	if err != nil {
+		return err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut,
+		c.baseURL+"/api/station/"+url.PathEscape(station)+"/file/"+strconv.Itoa(id), bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("User-Agent", userAgent)
+	if c.apiKey != "" {
+		req.Header.Set("X-API-Key", c.apiKey)
+	}
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		msg, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		return &StatusError{Status: resp.StatusCode, Body: string(msg)}
+	}
+	return nil
+}
+
+const userAgent = "Chilly-Radio/2.0"
+
+type RequestError struct {
+	Status  int
+	Message string
+}
+
+func (e *RequestError) Error() string {
+	return e.Message
+}
+
+func (c *Client) SubmitRequest(ctx context.Context, station, uniqueID string) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
+		c.baseURL+"/api/station/"+url.PathEscape(station)+"/request/"+url.PathEscape(uniqueID), nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("User-Agent", userAgent)
+	if c.apiKey != "" {
+		req.Header.Set("X-API-Key", c.apiKey)
+	}
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusOK {
+		return nil
+	}
+	var body struct {
+		Message          string  `json:"message"`
+		FormattedMessage *string `json:"formatted_message"`
+	}
+	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+	msg := "the station couldn't take that request"
+	if json.Unmarshal(raw, &body) == nil && body.Message != "" {
+		msg = strings.TrimSpace(body.Message)
+	}
+	return &RequestError{Status: resp.StatusCode, Message: msg}
+}
+
+func (c *Client) SkipSong(ctx context.Context, station string) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
+		c.baseURL+"/api/station/"+url.PathEscape(station)+"/backend/skip", nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("User-Agent", userAgent)
+	if c.apiKey != "" {
+		req.Header.Set("X-API-Key", c.apiKey)
+	}
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		msg, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		return &StatusError{Status: resp.StatusCode, Body: string(msg)}
+	}
 	return nil
 }

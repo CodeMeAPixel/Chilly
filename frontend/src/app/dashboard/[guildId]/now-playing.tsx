@@ -14,12 +14,14 @@ import {
   Volume2,
   VolumeX,
 } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import { useEffect, useEffectEvent, useState } from "react";
 import { TrackArt } from "@/components/track-art";
 import { Badge, Button, Card, Equalizer } from "@/components/ui";
 import { useLivePosition, type usePlayer } from "@/hooks/use-player";
+import { api } from "@/lib/api";
 import { cn, formatDuration, sourceLabels } from "@/lib/format";
-import type { LoopMode, PlayerState } from "@/lib/types";
+import type { LoopMode, PlayerState, Station } from "@/lib/types";
 
 type Actions = ReturnType<typeof usePlayer>["actions"];
 
@@ -37,6 +39,14 @@ export function NowPlaying({
   const position = useLivePosition(state, receivedAt);
   const track = state.current;
   const disabled = !state.can_control || !track;
+  const radio = track?.radio_station;
+  const { data: stations } = useQuery({
+    queryKey: ["stations"],
+    queryFn: async () => (await api<{ stations: Station[] }>("/radio/stations")).stations,
+    enabled: !!radio,
+    refetchInterval: 15_000,
+  });
+  const onAir = radio ? stations?.find((s) => s.shortcode === radio)?.now_playing?.song : undefined;
 
   return (
     <Card className="relative overflow-hidden">
@@ -55,9 +65,9 @@ export function NowPlaying({
                 {track.is_stream && <Badge tone="accent">Live</Badge>}
                 {track.playlist_name && <Badge>From {track.playlist_name}</Badge>}
               </div>
-              <h2 className="line-clamp-2 font-display text-2xl font-semibold sm:text-3xl">{track.title}</h2>
+              <h2 className="line-clamp-2 font-display text-2xl font-semibold sm:text-3xl">{onAir?.title || track.title}</h2>
               <p className="flex items-center gap-2 text-muted">
-                <span className="truncate">{track.author}</span>
+                <span className="truncate">{onAir ? `${onAir.artist} · on ${track.title}` : track.author}</span>
                 {track.uri && (
                   <a href={track.uri} target="_blank" rel="noreferrer" className="shrink-0 hover:text-fg" aria-label="Open source">
                     <ExternalLink className="h-4 w-4" />
@@ -76,35 +86,53 @@ export function NowPlaying({
 
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="flex items-center gap-1">
+              {!radio && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label="Shuffle"
+                  disabled={!state.can_control}
+                  onClick={actions.toggleShuffle}
+                  className={cn(state.shuffle && "text-primary")}
+                >
+                  <Shuffle className="h-5 w-5" />
+                </Button>
+              )}
               <Button
                 variant="ghost"
                 size="icon"
-                aria-label="Shuffle"
-                disabled={!state.can_control}
-                onClick={actions.toggleShuffle}
-                className={cn(state.shuffle && "text-primary")}
+                aria-label={radio ? "Previous station" : "Previous"}
+                title={radio ? "Previous station" : undefined}
+                disabled={disabled}
+                onClick={radio ? () => actions.stepStation("previous") : actions.previous}
               >
-                <Shuffle className="h-5 w-5" />
-              </Button>
-              <Button variant="ghost" size="icon" aria-label="Previous" disabled={disabled} onClick={actions.previous}>
                 <SkipBack className="h-5 w-5" />
               </Button>
               <Button size="icon" aria-label={state.paused ? "Play" : "Pause"} disabled={disabled} onClick={actions.togglePause} className="h-12 w-12 rounded-2xl">
                 {state.paused ? <Play className="h-5 w-5 fill-current" /> : <Pause className="h-5 w-5 fill-current" />}
               </Button>
-              <Button variant="ghost" size="icon" aria-label="Skip" disabled={disabled} onClick={actions.skip}>
-                <SkipForward className="h-5 w-5" />
-              </Button>
               <Button
                 variant="ghost"
                 size="icon"
-                aria-label={`Loop: ${state.loop}`}
-                disabled={!state.can_control}
-                onClick={() => actions.setLoop(nextLoop[state.loop])}
-                className={cn(state.loop !== "none" && "text-primary")}
+                aria-label={radio ? "Next station" : "Skip"}
+                title={radio ? "Next station" : undefined}
+                disabled={disabled}
+                onClick={radio ? () => actions.stepStation("next") : actions.skip}
               >
-                {state.loop === "track" ? <Repeat1 className="h-5 w-5" /> : <Repeat className="h-5 w-5" />}
+                <SkipForward className="h-5 w-5" />
               </Button>
+              {!radio && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label={`Loop: ${state.loop}`}
+                  disabled={!state.can_control}
+                  onClick={() => actions.setLoop(nextLoop[state.loop])}
+                  className={cn(state.loop !== "none" && "text-primary")}
+                >
+                  {state.loop === "track" ? <Repeat1 className="h-5 w-5" /> : <Repeat className="h-5 w-5" />}
+                </Button>
+              )}
               <Button variant="ghost" size="icon" aria-label="Stop" disabled={disabled} onClick={actions.stop}>
                 <Square className="h-4 w-4 fill-current" />
               </Button>

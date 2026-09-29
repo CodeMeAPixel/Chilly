@@ -13,7 +13,7 @@ import (
 
 func queueLine(i int, track lavalink.Track) string {
 	line := fmt.Sprintf("\n%d. %s `%s`", i+1, musicbot.TrackLink(track), musicbot.TrackDuration(track))
-	if track.Info.SourceName == "deezer" || track.Info.SourceName == "spotify" {
+	if track.Info.SourceName == musicbot.LibrarySource && track.Info.Author != "" {
 		line += " " + musicbot.EscapeMarkdown(track.Info.Author)
 	}
 	return line

@@ -31,12 +31,14 @@ const (
 	ShuffleOn    ButtonID = "shuffle_on"
 	ShuffleOff   ButtonID = "shuffle_off"
 	ShowLyrics   ButtonID = "show_lyrics"
+	PrevStation  ButtonID = "prev_station"
+	NextStation  ButtonID = "next_station"
 )
 
 var playerButtons = map[ButtonID]bool{
 	PlayPrevious: true, PlayNext: true, PausePlayer: true, ResumePlayer: true, StopPlayer: true,
 	LoopQueue: true, LoopTrack: true, LoopOff: true, ShuffleOn: true, ShuffleOff: true,
-	ShowLyrics: true,
+	ShowLyrics: true, PrevStation: true, NextStation: true,
 }
 
 func (h *Handlers) OnPlayerInteraction(event *events.ComponentInteractionCreate) {
@@ -90,6 +92,24 @@ func (h *Handlers) OnPlayerInteraction(event *events.ComponentInteractionCreate)
 
 	var err error
 	switch buttonID {
+	case PrevStation, NextStation:
+		_ = event.DeferUpdateMessage()
+		step := 1
+		if buttonID == PrevStation {
+			step = -1
+		}
+		canManage := h.CanManageStay(guildID, event.User().ID, event.Member())
+		if _, err := h.StepStation(ctx, guildID, event.User().ID, step, canManage); err != nil {
+			if errors.Is(err, musicbot.ErrNoOtherStation) || errors.Is(err, musicbot.ErrNotRadio) {
+				_, _ = h.Client.Rest().CreateFollowupMessage(h.Client.ApplicationID(), event.Token(), discord.MessageCreate{
+					Content: err.Error() + ".",
+					Flags:   discord.MessageFlagEphemeral,
+				})
+				return
+			}
+			musicbot.LogCommandError(err, "button/"+string(buttonID), guildID.String(), event.User().ID.String())
+		}
+		return
 	case PlayNext, StopPlayer, PlayPrevious:
 
 		_ = event.DeferUpdateMessage()
@@ -212,6 +232,23 @@ func (h *Handlers) buttonRows(player *musicbot.Player) []discord.ContainerCompon
 	if player.IsPaused() {
 		playPause = emojiButton(ResumePlayer, musicbot.RESUME_PLAYER_EMOJI_ID)
 	}
+	dashboard := discord.NewLinkButton("Dashboard", h.SiteURL("/dashboard/"+player.GuildID().String()))
+
+	if track, ok := player.Current(); ok && musicbot.GetTrackMeta(track).Radio != "" {
+		return []discord.ContainerComponent{
+			discord.NewActionRow(
+				emojiButton(PrevStation, musicbot.PLAYER_PREVIOUS_EMOJI_ID),
+				playPause,
+				emojiButton(NextStation, musicbot.PLAYER_NEXT_EMOJI_ID),
+				discord.NewSecondaryButton("Lyrics", string(ShowLyrics)),
+			),
+			discord.NewActionRow(
+				emojiButton(StopPlayer, musicbot.STOP_PLAYER_EMOJI_ID),
+				discord.NewLinkButton("Request a song", h.SiteURL("/tracks")),
+				dashboard,
+			),
+		}
+	}
 
 	var repeat discord.ButtonComponent
 	switch player.Loop() {
@@ -239,7 +276,7 @@ func (h *Handlers) buttonRows(player *musicbot.Player) []discord.ContainerCompon
 			emojiButton(StopPlayer, musicbot.STOP_PLAYER_EMOJI_ID),
 			repeat,
 			shuffleButton,
-			discord.NewLinkButton("Dashboard", h.SiteURL("/dashboard/"+player.GuildID().String())),
+			dashboard,
 		),
 	}
 }

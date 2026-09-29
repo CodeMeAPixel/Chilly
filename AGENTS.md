@@ -11,7 +11,7 @@ Chilly is a self-hosted Discord music bot with a web dashboard.
 | `backend/` | Go 1.22, disgo, disgolink v3, pgx, PostgreSQL | Discord bot, Lavalink client, HTTP API (`/api/v1`) |
 | `frontend/` | Next.js 16 (App Router), React 19, Tailwind v4, TanStack Query, bun | Website, dashboard, status page |
 
-External services: Lavalink v4 nodes (with the youtube-source, LavaSrc and LavaSearch plugins), PostgreSQL, optional AzuraCast, and Discord. Everything is deployed with Docker on Dokploy.
+External services: AzuraCast (the only music source: stations, the song library and requests), Lavalink v4 nodes (HTTP source only, used to send audio to Discord), PostgreSQL and Discord. Everything is deployed with Docker on Dokploy.
 
 ## Ground rules
 
@@ -101,6 +101,6 @@ For UI changes, also run the app and look at the affected pages in light and dar
 
 ## Operational notes
 
-- Lavalink needs the youtube-source plugin (with the OAuth `TV` client and a remote cipher server), LavaSrc and LavaSearch. The built-in YouTube source must stay disabled (`lavalink.server.sources.youtube: false`, `plugins.lavasrc.sources.youtube: false`).
+- **All music comes from AzuraCast.** Do not add YouTube, Spotify, SoundCloud or other third-party sources, search providers or plugins. Lavalink only needs its HTTP source; library songs reach it through the signed `/api/v1/media/...` proxy, so `MEDIA_BASE_URL` must be reachable from every node.
 - On startup the bot logs the node's sources and plugins and disables search providers the node cannot serve. Check that log line first when searches fail.
 - `GET /api/v1/status` and the `/status` page show component health. Uptime history is in memory and resets on restart.

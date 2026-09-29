@@ -18,6 +18,9 @@ type Bot struct {
 	Db            *DB
 	PlayerManager *PlayerManager
 	Searcher      *Searcher
+	Media         *MediaSigner
+	Backfill      *LyricsBackfill
+	Requests      *Requests
 	Lyrics        *LyricsClient
 	Nodes         *NodeSupervisor
 	Radio         *azuracast.Service

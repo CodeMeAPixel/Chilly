@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/CodeMeAPixel/Chilly/azuracast"
 	"github.com/CodeMeAPixel/Chilly/musicbot"
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgolink/v3/disgolink"
@@ -38,6 +39,10 @@ func (s *Server) adminRoutes(mux *http.ServeMux) {
 	mux.Handle("POST "+p+"/guilds/{guildID}/leave", s.adminOnly(s.handleAdminLeave))
 	mux.Handle("POST "+p+"/search", s.adminOnly(s.handleAdminSearch))
 	mux.Handle("GET "+p+"/logs", s.adminOnly(s.handleAdminLogs))
+	mux.Handle("GET "+p+"/suggestions", s.adminOnly(s.handleAdminSuggestions))
+	mux.Handle("PATCH "+p+"/suggestions/{suggestionID}", s.adminOnly(s.handleAdminReviewSuggestion))
+	mux.Handle("GET "+p+"/requests", s.adminOnly(s.handleAdminRequests))
+	mux.Handle("POST "+p+"/stations/{station}/skip", s.adminOnly(s.handleAdminSkipSong))
 }
 
 type adminRadio struct {
@@ -49,22 +54,24 @@ type adminRadio struct {
 }
 
 type adminOverview struct {
-	Version          string              `json:"version"`
-	GoVersion        string              `json:"go_version"`
-	StartedAt        time.Time           `json:"started_at"`
-	UptimeSeconds    int64               `json:"uptime_seconds"`
-	Goroutines       int                 `json:"goroutines"`
-	HeapBytes        uint64              `json:"heap_bytes"`
-	SysBytes         uint64              `json:"sys_bytes"`
-	GatewayStatus    string              `json:"gateway_status"`
-	GatewayLatencyMs int64               `json:"gateway_latency_ms"`
-	Guilds           int                 `json:"guilds"`
-	Members          int                 `json:"members"`
-	Players          int                 `json:"players"`
-	Playing          int                 `json:"playing"`
-	Radio            adminRadio          `json:"radio"`
-	Stays            []stayView          `json:"stays"`
-	Nodes            []musicbot.NodeInfo `json:"nodes"`
+	Version          string                 `json:"version"`
+	GoVersion        string                 `json:"go_version"`
+	StartedAt        time.Time              `json:"started_at"`
+	UptimeSeconds    int64                  `json:"uptime_seconds"`
+	Goroutines       int                    `json:"goroutines"`
+	HeapBytes        uint64                 `json:"heap_bytes"`
+	SysBytes         uint64                 `json:"sys_bytes"`
+	GatewayStatus    string                 `json:"gateway_status"`
+	GatewayLatencyMs int64                  `json:"gateway_latency_ms"`
+	Guilds           int                    `json:"guilds"`
+	Members          int                    `json:"members"`
+	Players          int                    `json:"players"`
+	Playing          int                    `json:"playing"`
+	Radio            adminRadio             `json:"radio"`
+	Library          libraryStatus          `json:"library"`
+	LyricsBackfill   musicbot.BackfillStats `json:"lyrics_backfill"`
+	Stays            []stayView             `json:"stays"`
+	Nodes            []musicbot.NodeInfo    `json:"nodes"`
 }
 
 func (s *Server) handleAdminOverview(w http.ResponseWriter, r *http.Request, _ *Session) {
@@ -85,6 +92,10 @@ func (s *Server) handleAdminOverview(w http.ResponseWriter, r *http.Request, _ *
 		Playing:       playing,
 		Stays:         make([]stayView, 0),
 		Nodes:         s.nodes(),
+		Library:       s.libraryStatus(),
+	}
+	if s.bot.Backfill != nil {
+		resp.LyricsBackfill = s.bot.Backfill.Stats()
 	}
 	s.bot.Client.Caches().GuildsForEach(func(g discord.Guild) { resp.Members += g.MemberCount })
 	if s.bot.Client.HasGateway() {
@@ -271,20 +282,10 @@ func (s *Server) handleAdminLeave(w http.ResponseWriter, r *http.Request, sess *
 	w.WriteHeader(http.StatusNoContent)
 }
 
-type adminTrack struct {
-	Title    string `json:"title"`
-	Author   string `json:"author"`
-	LengthMs int64  `json:"length_ms"`
-	URI      string `json:"uri,omitempty"`
-	Source   string `json:"source"`
-	IsStream bool   `json:"is_stream"`
-}
-
 func (s *Server) handleAdminSearch(w http.ResponseWriter, r *http.Request, _ *Session) {
 	var req struct {
-		Query  string `json:"query"`
-		Source string `json:"source"`
-		Node   string `json:"node"`
+		Query string `json:"query"`
+		Node  string `json:"node"`
 	}
 	if !decodeJSON(w, r, &req) {
 		return
@@ -292,6 +293,19 @@ func (s *Server) handleAdminSearch(w http.ResponseWriter, r *http.Request, _ *Se
 	req.Query = strings.TrimSpace(req.Query)
 	if req.Query == "" {
 		writeError(w, http.StatusBadRequest, "bad_request", "query is required")
+		return
+	}
+
+	matches := s.bot.Searcher.Search(req.Query, 10)
+	resp := map[string]any{"tracks": []libraryResult{}, "total": len(matches)}
+	views := make([]libraryResult, len(matches))
+	for i, t := range matches {
+		views[i] = newLibraryResult(t)
+	}
+	resp["tracks"] = views
+	resp["library"] = s.libraryStatus()
+	if len(matches) == 0 || s.bot.Media == nil {
+		writeJSON(w, http.StatusOK, resp)
 		return
 	}
 
@@ -306,65 +320,62 @@ func (s *Server) handleAdminSearch(w http.ResponseWriter, r *http.Request, _ *Se
 		return
 	}
 
-	identifier := req.Query
-	if !strings.HasPrefix(identifier, "http://") && !strings.HasPrefix(identifier, "https://") {
-		source := req.Source
-		if source == "" {
-			source = "ytsearch"
-		}
-		identifier = source + ":" + identifier
-	}
-
 	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
 	defer cancel()
 	started := time.Now()
-	result, err := node.LoadTracks(ctx, identifier)
-	resp := map[string]any{
-		"node":       node.Config().Name,
-		"identifier": identifier,
-		"took_ms":    time.Since(started).Milliseconds(),
-		"tracks":     []adminTrack{},
+	result, err := node.LoadTracks(ctx, s.bot.Media.URL(matches[0].Station, matches[0].ID))
+	test := map[string]any{
+		"node":    node.Config().Name,
+		"track":   matches[0].Title,
+		"took_ms": time.Since(started).Milliseconds(),
 	}
-	if err != nil {
-		resp["load_type"] = "error"
-		resp["error"] = err.Error()
-		writeJSON(w, http.StatusOK, resp)
-		return
-	}
-	resp["load_type"] = result.LoadType
-
-	var tracks []lavalink.Track
-	switch data := result.Data.(type) {
-	case lavalink.Track:
-		tracks = []lavalink.Track{data}
-	case lavalink.Playlist:
-		resp["playlist"] = data.Info.Name
-		tracks = data.Tracks
-	case lavalink.Search:
-		tracks = data
-	case lavalink.Exception:
-		resp["error"] = data.Message
-		if data.Cause != "" {
-			resp["cause"] = data.Cause
+	switch {
+	case err != nil:
+		test["ok"] = false
+		test["error"] = err.Error()
+	case result.LoadType == lavalink.LoadTypeTrack:
+		test["ok"] = true
+		if t, ok := result.Data.(lavalink.Track); ok {
+			test["length_ms"] = int64(t.Info.Length)
+		}
+	default:
+		test["ok"] = false
+		test["error"] = "load type " + string(result.LoadType)
+		if ex, ok := result.Data.(lavalink.Exception); ok {
+			test["error"] = ex.Message
+			test["cause"] = ex.Cause
 		}
 	}
-	views := make([]adminTrack, 0, min(len(tracks), 10))
-	for _, t := range tracks[:min(len(tracks), 10)] {
-		view := adminTrack{
-			Title:    t.Info.Title,
-			Author:   t.Info.Author,
-			LengthMs: int64(t.Info.Length),
-			Source:   t.Info.SourceName,
-			IsStream: t.Info.IsStream,
-		}
-		if t.Info.URI != nil {
-			view.URI = *t.Info.URI
-		}
-		views = append(views, view)
-	}
-	resp["tracks"] = views
-	resp["total"] = len(tracks)
+	resp["playback_test"] = test
 	writeJSON(w, http.StatusOK, resp)
+}
+
+type libraryStatus struct {
+	Enabled  bool      `json:"enabled"`
+	Tracks   int       `json:"tracks"`
+	LastSync time.Time `json:"last_sync,omitempty"`
+	Error    string    `json:"error,omitempty"`
+	MediaURL string    `json:"media_url,omitempty"`
+}
+
+func (s *Server) libraryStatus() libraryStatus {
+	lib := s.bot.Searcher.Library()
+	if lib == nil {
+		return libraryStatus{}
+	}
+	count, lastSync, err := lib.Status()
+	status := libraryStatus{Enabled: true, Tracks: count, LastSync: lastSync, Error: errString(err)}
+	if s.bot.Media != nil {
+		status.MediaURL = s.bot.Media.BaseURL()
+	}
+	return status
+}
+
+func errString(err error) string {
+	if err == nil {
+		return ""
+	}
+	return err.Error()
 }
 
 func (s *Server) handleAdminLogs(w http.ResponseWriter, r *http.Request, _ *Session) {
@@ -384,4 +395,28 @@ func (s *Server) handleAdminLogs(w http.ResponseWriter, r *http.Request, _ *Sess
 		limit = 200
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"entries": s.bot.Logs.Entries(level, min(limit, 1000))})
+}
+
+func (s *Server) handleAdminSkipSong(w http.ResponseWriter, r *http.Request, sess *Session) {
+	if s.bot.Radio == nil {
+		writeError(w, http.StatusNotFound, "radio_disabled", "radio is not enabled")
+		return
+	}
+	station := r.PathValue("station")
+	np, ok := s.bot.Radio.Station(station)
+	if !ok {
+		writeError(w, http.StatusNotFound, "not_found", "unknown station")
+		return
+	}
+	if err := s.bot.Radio.Client().SkipSong(r.Context(), np.Station.Shortcode); err != nil {
+		var status *azuracast.StatusError
+		if errors.As(err, &status) && (status.Status == http.StatusUnauthorized || status.Status == http.StatusForbidden) {
+			writeError(w, http.StatusBadGateway, "forbidden", "AzuraCast refused the skip; the API key's user needs the Broadcasting permission")
+			return
+		}
+		writeError(w, http.StatusBadGateway, "skip_failed", err.Error())
+		return
+	}
+	slog.Info("admin skipped song", slog.String("station", np.Station.Shortcode), slog.String("admin_id", sess.UserID.String()))
+	w.WriteHeader(http.StatusNoContent)
 }

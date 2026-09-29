@@ -1,19 +1,20 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Check, ListMusic, Loader2, Pencil, Play, Plus, Trash2, X } from "lucide-react";
+import { ArrowLeft, Check, Disc3, Info, ListMusic, Loader2, Pencil, Plus, Search, Trash2, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { RequestButton } from "@/components/request-button";
+import { ServerPicker } from "@/components/server-picker";
 import { TrackArt } from "@/components/track-art";
-import { Button, buttonClass, Card, EmptyState, Input, Skeleton } from "@/components/ui";
-import { useGuilds } from "@/hooks/use-me";
+import { Badge, Button, buttonClass, Card, EmptyState, Input, Skeleton } from "@/components/ui";
 import { api, ApiError, json } from "@/lib/api";
-import { formatDuration } from "@/lib/format";
-import type { Playlist, PlaylistTrack } from "@/lib/types";
+import { cn, formatDuration } from "@/lib/format";
+import type { Playlist, PlaylistTrack, SearchResult } from "@/lib/types";
 
-type Detail = { playlist: Playlist; tracks: PlaylistTrack[] };
+type Detail = { playlist: Playlist; tracks: PlaylistTrack[]; available: number };
 
 const errorMessage = (err: unknown, fallback: string) => (err instanceof ApiError ? err.message : fallback);
 
@@ -66,8 +67,9 @@ export function PlaylistDetail({ playlistId }: { playlistId: string }) {
     );
   }
 
-  const { playlist, tracks } = data;
-  const totalMs = tracks.reduce((sum, t) => sum + (t.track.is_stream ? 0 : t.track.length_ms), 0);
+  const { playlist, tracks, available } = data;
+  const missing = tracks.length - available;
+  const totalMs = tracks.reduce((sum, t) => sum + (t.available && !t.track.is_stream ? t.track.length_ms : 0), 0);
 
   return (
     <div className="space-y-6">
@@ -84,11 +86,12 @@ export function PlaylistDetail({ playlistId }: { playlistId: string }) {
             <RenameTitle playlist={playlist} onRenamed={refresh} />
             <p className="text-sm text-muted">
               {tracks.length} track{tracks.length === 1 ? "" : "s"} · {formatDuration(totalMs)}
+              {missing > 0 && ` · ${available} playable`}
             </p>
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          <PlayInServer playlist={playlist} />
+          <ServerPicker onPick={(guildId, name) => queuePlaylist(playlist, guildId, name)} disabled={available === 0} />
           <Button
             variant="danger"
             onClick={() => {
@@ -100,7 +103,16 @@ export function PlaylistDetail({ playlistId }: { playlistId: string }) {
         </div>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[1fr_380px]">
+      {missing > 0 && (
+        <p className="flex items-start gap-2 rounded-2xl border border-border bg-surface-2/60 px-4 py-3 text-sm text-muted">
+          <Info className="mt-0.5 h-4 w-4 shrink-0" />
+          {missing === 1 ? "1 song isn't" : `${missing} songs aren't`} in the Chilly library yet, so{" "}
+          {missing === 1 ? "it's" : "they're"} skipped when you play this playlist. They start working automatically once they&apos;re
+          added to the library.
+        </p>
+      )}
+
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
         <Card className="overflow-hidden">
           {tracks.length === 0 ? (
             <EmptyState icon={<ListMusic className="h-6 w-6" />} title="This playlist is empty">
@@ -111,11 +123,15 @@ export function PlaylistDetail({ playlistId }: { playlistId: string }) {
               {tracks.map((item, index) => (
                 <li key={item.id} className="group flex items-center gap-3 px-5 py-2.5">
                   <span className="w-6 text-right font-mono text-xs text-muted">{index + 1}</span>
-                  <TrackArt track={item.track} className="h-10 w-10 rounded-lg" />
-                  <div className="min-w-0 flex-1">
+                  <TrackArt track={item.track} className={cn("h-10 w-10 rounded-lg", !item.available && "opacity-40 grayscale")} />
+                  <div className={cn("min-w-0 flex-1", !item.available && "opacity-60")}>
                     <p className="truncate text-sm font-medium">{item.track.title}</p>
-                    <p className="truncate text-xs text-muted">{item.track.author}</p>
+                    <p className="truncate text-xs text-muted">
+                      {[item.track.author, item.album].filter(Boolean).join(" · ")}
+                    </p>
                   </div>
+                  {!item.available && <Badge className="hidden shrink-0 sm:inline-flex">Not in library yet</Badge>}
+                  {item.available && <RequestButton songKey={item.track.identifier} title={item.track.title} compact />}
                   <span className="font-mono text-xs text-muted">
                     {item.track.is_stream ? "LIVE" : formatDuration(item.track.length_ms)}
                   </span>
@@ -183,87 +199,113 @@ function RenameTitle({ playlist, onRenamed }: { playlist: Playlist; onRenamed: (
   );
 }
 
+function useDebounced<T>(value: T, delay: number) {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const id = setTimeout(() => setDebounced(value), delay);
+    return () => clearTimeout(id);
+  }, [value, delay]);
+  return debounced;
+}
+
 function AddToPlaylist({ playlistId, onAdded }: { playlistId: string; onAdded: () => void }) {
   const [query, setQuery] = useState("");
+  const debounced = useDebounced(query.trim(), 300);
+  const { data: results, isFetching } = useQuery({
+    queryKey: ["search", debounced],
+    queryFn: async () =>
+      (await api<{ results: SearchResult[] }>(`/search?${new URLSearchParams({ q: debounced, limit: "12" })}`)).results,
+    enabled: debounced.length > 1,
+    staleTime: 60_000,
+  });
+
   const add = useMutation({
-    mutationFn: (value: string) =>
-      api<{ added: number }>(`/playlists/${playlistId}/tracks`, { method: "POST", body: json({ query: value }) }),
+    mutationFn: (body: { query: string; type?: "album" }) =>
+      api<{ added: number }>(`/playlists/${playlistId}/tracks`, { method: "POST", body: json(body) }),
     onSuccess: (res) => {
-      toast.success(res.added === 1 ? "Track added" : `Added ${res.added} tracks`);
-      setQuery("");
+      toast.success(res.added === 1 ? "Song added" : `Added ${res.added} songs`);
       onAdded();
     },
     onError: (err) => toast.error(errorMessage(err, "Couldn't add that")),
   });
 
   return (
-    <Card className="h-fit space-y-3 p-5">
-      <h2 className="font-display text-lg font-semibold">Add music</h2>
-      <p className="text-sm text-muted">Search for a song, or paste a link to a track, album or playlist.</p>
-      <form
-        className="space-y-3"
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (query.trim()) add.mutate(query.trim());
-        }}
-      >
-        <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Song name or link" />
-        <Button type="submit" className="w-full" disabled={!query.trim() || add.isPending}>
-          {add.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Add to playlist
-        </Button>
-      </form>
+    <Card className="flex h-fit flex-col overflow-hidden">
+      <div className="space-y-3 p-5 pb-4">
+        <h2 className="font-display text-lg font-semibold">Add music</h2>
+        <div className="relative">
+          <Search className="pointer-events-none absolute top-1/2 left-3.5 h-4 w-4 -translate-y-1/2 text-muted" />
+          <Input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search the library"
+            className="pl-10"
+            aria-label="Search the library"
+          />
+        </div>
+      </div>
+      {debounced.length > 1 && (
+        <div className="max-h-110 overflow-y-auto border-t border-border">
+          {isFetching && !results ? (
+            <div className="flex justify-center p-8 text-muted">
+              <Loader2 className="h-5 w-5 animate-spin" />
+            </div>
+          ) : !results?.length ? (
+            <p className="p-5 text-sm text-muted">Nothing in the library matches that yet.</p>
+          ) : (
+            <ul className="divide-y divide-border">
+              {results.map((result) => (
+                <li key={result.value} className="flex items-center gap-3 px-4 py-2.5">
+                  <TrackArt track={result} className="h-10 w-10 rounded-lg" />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium">{result.title}</p>
+                    <p className="truncate text-xs text-muted">{[result.author, result.album].filter(Boolean).join(" · ")}</p>
+                  </div>
+                  {result.album && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
+                      aria-label={`Add the album ${result.album}`}
+                      title={`Add the album ${result.album}`}
+                      disabled={add.isPending}
+                      onClick={() => add.mutate({ query: result.album!, type: "album" })}
+                    >
+                      <Disc3 className="h-4 w-4" />
+                    </Button>
+                  )}
+                  <Button
+                    variant="secondary"
+                    size="icon"
+                    className="h-8 w-8"
+                    aria-label={`Add ${result.title}`}
+                    disabled={add.isPending}
+                    onClick={() => add.mutate({ query: result.value })}
+                  >
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
     </Card>
   );
 }
 
-function PlayInServer({ playlist }: { playlist: Playlist }) {
-  const [open, setOpen] = useState(false);
-  const { data: guilds, isLoading } = useGuilds(open);
-  const [busy, setBusy] = useState<string | null>(null);
-  const candidates = (guilds ?? []).filter((g) => g.user_voice_channel_id || g.listening_with_bot || g.can_manage);
-
-  const play = async (guildId: string, name: string) => {
-    setBusy(guildId);
-    try {
-      const res = await api<{ added: number }>(`/guilds/${guildId}/queue`, {
-        method: "POST",
-        body: json({ playlist_id: playlist.id, shuffle: true }),
-      });
-      toast.success(`Queued ${res.added} tracks in ${name}`);
-      setOpen(false);
-    } catch (err) {
-      toast.error(errorMessage(err, "Couldn't queue the playlist"));
-    } finally {
-      setBusy(null);
-    }
-  };
-
-  return (
-    <div className="relative">
-      <Button onClick={() => setOpen((v) => !v)} disabled={playlist.track_count === 0}>
-        <Play className="h-4 w-4" /> Play in server
-      </Button>
-      {open && (
-        <div className="absolute right-0 z-20 mt-2 w-72 rounded-2xl border border-border bg-surface p-2 shadow-2xl">
-          {isLoading ? (
-            <p className="p-3 text-sm text-muted">Loading servers…</p>
-          ) : candidates.length === 0 ? (
-            <p className="p-3 text-sm text-muted">Join a voice channel in a server with Chilly first.</p>
-          ) : (
-            candidates.map((g) => (
-              <button
-                key={g.id}
-                onClick={() => play(g.id, g.name)}
-                disabled={busy !== null}
-                className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm hover:bg-surface-2 disabled:opacity-50 cursor-pointer"
-              >
-                <span className="truncate">{g.name}</span>
-                {busy === g.id && <Loader2 className="h-4 w-4 animate-spin text-muted" />}
-              </button>
-            ))
-          )}
-        </div>
-      )}
-    </div>
-  );
+async function queuePlaylist(playlist: Playlist, guildId: string, guildName: string) {
+  try {
+    const res = await api<{ added: number; missing: number }>(`/guilds/${guildId}/queue`, {
+      method: "POST",
+      body: json({ playlist_id: playlist.id, shuffle: true }),
+    });
+    toast.success(`Queued ${res.added} songs in ${guildName}`, {
+      description: res.missing > 0 ? `${res.missing} skipped because they aren't in the library yet.` : undefined,
+    });
+    return true;
+  } catch (err) {
+    toast.error(errorMessage(err, "Couldn't queue the playlist"));
+    return false;
+  }
 }

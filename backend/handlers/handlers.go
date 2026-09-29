@@ -237,9 +237,7 @@ func (h *Handlers) OnTrackEnd(p disgolink.Player, event lavalink.TrackEndEvent) 
 		return
 	}
 
-	if h.shouldTryAlternative(player, event) {
-		go h.playAlternative(player, event)
-	} else if event.Reason.MayStartNext() {
+	if event.Reason.MayStartNext() {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		if err := player.OnTrackEnd(ctx, event); err != nil {
 			slog.Error("failed to play next track in queue",
@@ -267,44 +265,6 @@ func (h *Handlers) OnTrackEnd(p disgolink.Player, event lavalink.TrackEndEvent) 
 			}
 		}
 	}()
-}
-
-func (h *Handlers) shouldTryAlternative(player *musicbot.Player, event lavalink.TrackEndEvent) bool {
-	if event.Reason != lavalink.TrackEndReasonLoadFailed || !player.IsCurrent(event.Track) {
-		return false
-	}
-	meta := musicbot.GetTrackMeta(event.Track)
-	return meta.Radio == "" && !meta.Fallback
-}
-
-func (h *Handlers) playAlternative(player *musicbot.Player, event lavalink.TrackEndEvent) {
-	guildID := player.GuildID()
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
-
-	if alternative, ok := h.Searcher.FindAlternative(ctx, event.Track); ok {
-		meta := musicbot.GetTrackMeta(event.Track)
-		meta.Fallback = true
-		alternative = musicbot.WithTrackMeta([]lavalink.Track{alternative}, meta)[0]
-
-		replaced, err := player.ReplaceFailed(ctx, event.Track, alternative)
-		if err != nil {
-			slog.Error("failed to play alternative track", slog.Any("error", err), slog.String("guild_id", guildID.String()))
-		}
-		if replaced {
-			slog.Info("playing alternative source for failed track",
-				slog.String("guild_id", guildID.String()),
-				slog.String("title", event.Track.Info.Title),
-				slog.String("failed_source", event.Track.Info.SourceName),
-				slog.String("alternative_source", alternative.Info.SourceName),
-			)
-			return
-		}
-	}
-
-	if err := player.OnTrackEnd(ctx, event); err != nil {
-		slog.Error("failed to play next track in queue", slog.Any("error", err), slog.String("guild_id", guildID.String()))
-	}
 }
 
 func (h *Handlers) OnTrackException(p disgolink.Player, event lavalink.TrackExceptionEvent) {

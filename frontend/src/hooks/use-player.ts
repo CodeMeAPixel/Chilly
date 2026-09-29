@@ -78,6 +78,8 @@ export function usePlayer(guildId: string) {
     skip: () => run(api<PlayerState>(`${base}/player/skip?queue_limit=200`, { method: "POST" })),
     previous: () => run(api<PlayerState>(`${base}/player/previous?queue_limit=200`, { method: "POST" })),
     stop: () => run(api<PlayerState>(`${base}/player/stop?queue_limit=200`, { method: "POST" }), "Stopped and cleared the queue"),
+    stepStation: (direction: "next" | "previous") =>
+      run(api<PlayerState>(`${base}/radio/step?queue_limit=200`, { method: "POST", body: json({ direction }) })),
     disableStay: () =>
       run(
         api(`${base}/radio/247`, { method: "DELETE" }).then(() => api<PlayerState>(`${base}/player?queue_limit=200`)),
@@ -87,7 +89,14 @@ export function usePlayer(guildId: string) {
     remove: (index: number) => run(api<PlayerState>(`${base}/queue/${index}?queue_limit=200`, { method: "DELETE" })),
     move: (from: number, to: number) =>
       run(api<PlayerState>(`${base}/queue/move?queue_limit=200`, { method: "POST", body: json({ from, to }) })),
-    enqueue: async (body: { query?: string; playlist_id?: number; next?: boolean; play_now?: boolean; shuffle?: boolean }) => {
+    enqueue: async (body: {
+      query?: string;
+      type?: "track" | "album" | "artist" | "playlist";
+      playlist_id?: number;
+      next?: boolean;
+      play_now?: boolean;
+      shuffle?: boolean;
+    }) => {
       try {
         const res = await api<{ added: number; player: PlayerState }>(`${base}/queue?queue_limit=200`, {
           method: "POST",

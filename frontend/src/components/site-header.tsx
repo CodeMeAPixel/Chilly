@@ -7,7 +7,7 @@ import { UserNav } from "./user-nav";
 
 const links = [
   { href: "/radio", label: "Stations" },
-  { href: "/#features", label: "Features" },
+  { href: "/tracks", label: "Tracks" },
   { href: "/#commands", label: "Commands" },
   { href: "/status", label: "Status" },
   { href: "/dashboard", label: "Dashboard" },

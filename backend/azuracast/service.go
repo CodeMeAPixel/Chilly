@@ -167,3 +167,13 @@ func (s *Service) StreamURL(np NowPlaying) string {
 	u.Host = base.Host
 	return u.String()
 }
+
+func (s *Service) Client() *Client {
+	return s.client
+}
+
+func (s *Service) Shortcodes() []string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return append([]string(nil), s.order...)
+}

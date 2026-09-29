@@ -33,6 +33,7 @@ type PlaylistTrack struct {
 	Track      lavalink.Track `db:"track"`
 	AddedAt    time.Time      `db:"added_at"`
 	AddedBy    snowflake.ID   `db:"added_by"`
+	LibraryKey string         `db:"library_key"`
 }
 
 const playlistColumns = "p.id, p.name, p.owner_id, p.created_at, (SELECT COUNT(*) FROM playlist_tracks t WHERE t.playlist_id = p.id)"
@@ -78,8 +79,9 @@ func (d *DB) scanTracks(rows pgx.Rows) ([]PlaylistTrack, error) {
 			rawTrack json.RawMessage
 			addedBy  int64
 			addedAt  *time.Time
+			key      *string
 		)
-		if err := rows.Scan(&track.ID, &track.PlaylistID, &track.TrackTitle, &rawTrack, &addedAt, &addedBy); err != nil {
+		if err := rows.Scan(&track.ID, &track.PlaylistID, &track.TrackTitle, &rawTrack, &addedAt, &addedBy, &key); err != nil {
 			slog.Error("failed to parse playlist track from database", slog.Any("err", err))
 			continue
 		}
@@ -88,6 +90,9 @@ func (d *DB) scanTracks(rows pgx.Rows) ([]PlaylistTrack, error) {
 			continue
 		}
 		track.AddedBy = snowflake.ID(addedBy)
+		if key != nil {
+			track.LibraryKey = *key
+		}
 		if addedAt != nil {
 			track.AddedAt = *addedAt
 		}
@@ -171,7 +176,7 @@ func (d *DB) GetPlaylist(ctx context.Context, userID snowflake.ID, playlistID in
 	}
 
 	rows, err := d.Pool.Query(ctx,
-		"SELECT id, playlist_id, track_title, track, added_at, added_by FROM playlist_tracks WHERE playlist_id = $1 ORDER BY id",
+		"SELECT id, playlist_id, track_title, track, added_at, added_by, library_key FROM playlist_tracks WHERE playlist_id = $1 ORDER BY id",
 		playlistID)
 	if err != nil {
 		return playlist, nil, err
@@ -192,9 +197,14 @@ func (d *DB) AddTracksToPlaylist(ctx context.Context, playlistId int, userId sno
 	batch := &pgx.Batch{}
 	for _, track := range tracks {
 		track.UserData = nil
+		var key *string
+		if track.Info.SourceName == LibrarySource {
+			id := track.Info.Identifier
+			key = &id
+		}
 		batch.Queue(
-			"INSERT INTO playlist_tracks (playlist_id, track_title, added_by, track) VALUES ($1, $2, $3, $4)",
-			playlistId, Trim(TrackTitle(track), 255), int64(userId), track)
+			"INSERT INTO playlist_tracks (playlist_id, track_title, added_by, track, library_key) VALUES ($1, $2, $3, $4, $5)",
+			playlistId, Trim(TrackTitle(track), 255), int64(userId), track, key)
 	}
 	return d.Pool.SendBatch(ctx, batch).Close()
 }
@@ -212,6 +222,51 @@ func (d *DB) RemoveTrackFromPlaylist(ctx context.Context, userID snowflake.ID, p
 		return ErrPlaylistNotFound
 	}
 	return nil
+}
+
+func (d *DB) LinkLegacyPlaylistTracks(ctx context.Context, lib *Library) (int, error) {
+	rows, err := d.Pool.Query(ctx, "SELECT id, track FROM playlist_tracks WHERE library_key IS NULL")
+	if err != nil {
+		return 0, err
+	}
+	type link struct {
+		id  int
+		key string
+	}
+	var links []link
+	for rows.Next() {
+		var (
+			id  int
+			raw json.RawMessage
+		)
+		if err := rows.Scan(&id, &raw); err != nil {
+			rows.Close()
+			return 0, err
+		}
+		var track lavalink.Track
+		if err := json.Unmarshal(raw, &track); err != nil {
+			continue
+		}
+		if match, ok := lib.Match(QueryFromTrack(track)); ok {
+			links = append(links, link{id: id, key: match.Key()})
+		}
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return 0, err
+	}
+	if len(links) == 0 {
+		return 0, nil
+	}
+
+	batch := &pgx.Batch{}
+	for _, l := range links {
+		batch.Queue("UPDATE playlist_tracks SET library_key = $1 WHERE id = $2 AND library_key IS NULL", l.key, l.id)
+	}
+	if err := d.Pool.SendBatch(ctx, batch).Close(); err != nil {
+		return 0, err
+	}
+	return len(links), nil
 }
 
 func escapeLike(s string) string {

@@ -6,20 +6,64 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-09-29
+
+Chilly is now a 24/7 radio bot powered entirely by AzuraCast. Stations can stay on around the clock, every song comes from your own AzuraCast library, and listeners can request and suggest songs. Third-party sources such as YouTube and Spotify are gone.
+
+### Upgrading from 1.x
+
+1. In AzuraCast, create a user for the bot with the **Media** and **Broadcasting** permissions on each station, and set its API key as `AZURACAST_API_KEY`.
+2. Set `MEDIA_BASE_URL` to an address where every Lavalink node can reach the bot's API directly (not through the website).
+3. Deploy, then run **Admin → Tools → Library check** against each node.
+4. Remove the youtube-source, LavaSrc and LavaSearch plugins and the yt-cipher service from your Lavalink nodes. Only the HTTP source is needed; the Pterodactyl egg in `extras/` installs that setup.
+5. Turn on song requests for your stations and the playlists that should be requestable.
+6. Remove `SEARCH_PROVIDERS` from your environment; it's no longer read.
+
+Database changes are applied automatically on startup. Existing playlists are kept, and their songs are matched to the library as it grows.
+
 ### Added
 
+#### Radio
+
 - 24/7 radio: `/247 on`, `/247 off` and `/247 status` keep a station playing in a voice channel even when it's empty. The setting survives restarts, and the bot rejoins and restarts the station on its own.
-- 24/7 controls on the website: a "Keep it playing 24/7" option when sending a station to a server, and a 24/7 banner with an off switch in the dashboard player.
+- Station switching: while a station is playing, the player message's previous and next buttons and the dashboard's controls change stations. With 24/7 on, members with Manage Server move the 24/7 station too.
 - A redesigned radio page with search, filters, sorting, compact station cards and a sticky player bar with volume control.
-- An admin panel for users in `API_ADMIN_USER_IDS`, with bot and node health, every server the bot is in, player actions (disconnect, move node, leave server), a track lookup tester and recent logs.
+- A "Keep it playing 24/7" option when sending a station to a server from the website, and a 24/7 banner with an off switch in the dashboard player.
+
+#### Library and playback
+
+- A music library synced from AzuraCast. `/play`, `/search`, `/list add` and the dashboard search it by song, album, artist or AzuraCast playlist, with instant autocomplete.
+- A signed media proxy (`/api/v1/media/...`) that streams library songs from AzuraCast to Lavalink, including seeking. Configure it with `MEDIA_BASE_URL` and optionally `MEDIA_SIGNING_KEY`.
+- A public tracks page (`/tracks`) to browse every song, artist, album and station playlist, with search, sorting and paging.
+- Personal playlists hold library songs. Songs saved from other services are matched to the library automatically after each sync; songs that aren't in the library yet are marked and skipped when a playlist plays.
+- Station playlists from AzuraCast are listed on the playlists page, where you can browse their songs and queue them in a server.
+- Lyrics stored on songs in AzuraCast are shown before falling back to LRCLIB, for library songs and station songs.
+- An optional lyrics backfill job (`AZURACAST_LYRICS_BACKFILL`) that finds missing lyrics on LRCLIB and saves them to songs in AzuraCast.
+
+#### Requests and suggestions
+
+- Song requests: `/request`, a Request button on the tracks and playlist pages, and `POST /api/v1/requests` ask a station to play a library song soon. Each request is tracked from waiting to on air to played, and expires if it never plays.
+- Song suggestions: `/suggest` and the My requests page let people suggest songs that aren't in the library. Suggestions are marked added automatically when a matching song appears in the library, and people get a DM when theirs is added or declined.
+- A My requests page (`/dashboard/requests`) and `/requests` command showing each person's requests and suggestions.
+- Configurable per-user limits: `REQUEST_COOLDOWN`, `REQUEST_MAX_PENDING` and `SUGGESTION_MAX_OPEN`.
+
+#### Admin
+
+- An admin panel for users in `API_ADMIN_USER_IDS`, with bot, library and node health, every server the bot is in, player actions (disconnect, move node, leave server), a library and playback check, recent logs, a suggestion review queue, recent requests and per-station song skipping.
+
+#### Website and operations
+
 - A brand page with logo downloads, colours, typography and copy, and a bot list template in `docs/bot-listing.md`.
 - Optional `NODE_LOCATION` / `NODE_n_LOCATION` settings, shown on the status page and in the admin panel.
 - A mobile navigation menu for the website and dashboard.
 
 ### Changed
 
-- Chilly is now presented as a 24/7 radio bot first, across the website, help and invite embeds, the default presence and the README. Song playback is still fully supported.
-- The invite link now asks only for the permissions Chilly uses, and no longer requests Manage Server, Manage Channels, Manage Messages, View Audit Log or Add Reactions.
+- **Breaking:** AzuraCast is now the only music source. YouTube, SoundCloud, Spotify and other third-party sources, `SEARCH_PROVIDERS`, the alternative-source fallback and the Lavalink plugins are removed, and links to other services are no longer accepted. Lavalink only needs its HTTP source.
+- **Breaking:** `/play`, `/search` and `/list add` take a `type` option (song, album, artist or playlist) instead of `source`, and the API's `source` field on queue and playlist requests is now `type`.
+- Chilly is presented as a 24/7 radio bot first across the website, help and invite embeds, the default presence and the README.
+- The invite link asks only for the permissions Chilly uses, and no longer requests Manage Server, Manage Channels, Manage Messages, View Audit Log or Add Reactions.
+- The dashboard's search panel searches the library and can queue a song's whole album.
 - Track exception logs include the node name and no longer repeat the error twice.
 
 ### Fixed
@@ -79,5 +123,6 @@ The first public release of Chilly: a self-hosted Discord music bot with a web d
 - Secrets are never logged: the Discord and Lavalink client libraries are capped at Info level because the gateway token is logged at Debug.
 - Session tokens are stored hashed, and cookies are `HttpOnly` and `Secure` by default.
 
-[Unreleased]: https://github.com/CodeMeAPixel/Chilly/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/CodeMeAPixel/Chilly/compare/v2.0.0...HEAD
+[2.0.0]: https://github.com/CodeMeAPixel/Chilly/compare/v1.0.0...v2.0.0
 [1.0.0]: https://github.com/CodeMeAPixel/Chilly/releases/tag/v1.0.0

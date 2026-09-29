@@ -8,8 +8,6 @@ require (
 	github.com/disgoorg/disgo v0.18.13
 	github.com/disgoorg/disgolink/v3 v3.1.0
 	github.com/disgoorg/json v1.2.0
-	github.com/disgoorg/lavasearch-plugin v1.0.0
-	github.com/disgoorg/lavasrc-plugin v1.0.0
 	github.com/disgoorg/snowflake/v2 v2.0.3
 	github.com/gorilla/websocket v1.5.3
 	github.com/jackc/pgx/v5 v5.6.0

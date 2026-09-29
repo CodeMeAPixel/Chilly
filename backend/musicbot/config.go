@@ -66,16 +66,20 @@ func defaultConfig() Config {
 		Lyrics: LyricsConfig{
 			URL: "https://lrclib.net",
 		},
-		Search: SearchConfig{
-			Providers: []string{"scsearch", "spsearch", "dzsearch"},
-		},
 		API: APIConfig{
 			Address:      ":8080",
 			CookieSecure: true,
 			SessionTTL:   7 * 24 * time.Hour,
 		},
+		Requests: RequestConfig{
+			Cooldown:           5 * time.Minute,
+			MaxPending:         3,
+			MaxOpenSuggestions: 5,
+		},
 		AzuraCast: AzuraCastConfig{
-			PollInterval: 15 * time.Second,
+			PollInterval:           15 * time.Second,
+			LibrarySyncInterval:    10 * time.Minute,
+			LyricsBackfillInterval: 6 * time.Hour,
 		},
 	}
 }
@@ -143,7 +147,11 @@ func loadFromEnvironment(cfg *Config) error {
 
 	cfg.Site.URL = strings.TrimRight(getenv("SITE_URL", cfg.Site.URL), "/")
 	cfg.Lyrics.URL = strings.TrimRight(getenv("LYRICS_API_URL", cfg.Lyrics.URL), "/")
-	cfg.Search.Providers = parseStringSliceEnv("SEARCH_PROVIDERS", cfg.Search.Providers)
+	cfg.Requests.Cooldown = parseDurationEnv("REQUEST_COOLDOWN", cfg.Requests.Cooldown)
+	cfg.Requests.MaxPending = parseIntEnv("REQUEST_MAX_PENDING", cfg.Requests.MaxPending)
+	cfg.Requests.MaxOpenSuggestions = parseIntEnv("SUGGESTION_MAX_OPEN", cfg.Requests.MaxOpenSuggestions)
+	cfg.Media.BaseURL = strings.TrimRight(getenv("MEDIA_BASE_URL", cfg.Media.BaseURL), "/")
+	cfg.Media.SigningKey = getenv("MEDIA_SIGNING_KEY", cfg.Media.SigningKey)
 
 	cfg.API.Enabled = parseBoolEnv("API_ENABLED", cfg.API.Enabled)
 	cfg.API.Address = getenv("API_ADDRESS", cfg.API.Address)
@@ -164,6 +172,9 @@ func loadFromEnvironment(cfg *Config) error {
 	cfg.AzuraCast.Stations = parseStringSliceEnv("AZURACAST_STATIONS", cfg.AzuraCast.Stations)
 	cfg.AzuraCast.PollInterval = parseDurationEnv("AZURACAST_POLL_INTERVAL", cfg.AzuraCast.PollInterval)
 	cfg.AzuraCast.StreamBaseURL = strings.TrimRight(getenv("AZURACAST_STREAM_BASE_URL", cfg.AzuraCast.StreamBaseURL), "/")
+	cfg.AzuraCast.LibrarySyncInterval = parseDurationEnv("AZURACAST_LIBRARY_SYNC_INTERVAL", cfg.AzuraCast.LibrarySyncInterval)
+	cfg.AzuraCast.LyricsBackfill = parseBoolEnv("AZURACAST_LYRICS_BACKFILL", cfg.AzuraCast.LyricsBackfill)
+	cfg.AzuraCast.LyricsBackfillInterval = parseDurationEnv("AZURACAST_LYRICS_BACKFILL_INTERVAL", cfg.AzuraCast.LyricsBackfillInterval)
 
 	return nil
 }
@@ -313,7 +324,8 @@ type Config struct {
 	Log          LogConfig       `yaml:"log"`
 	Site         SiteConfig      `yaml:"site"`
 	Lyrics       LyricsConfig    `yaml:"lyrics"`
-	Search       SearchConfig    `yaml:"search"`
+	Media        MediaConfig     `yaml:"media"`
+	Requests     RequestConfig   `yaml:"requests"`
 	API          APIConfig       `yaml:"api"`
 	AzuraCast    AzuraCastConfig `yaml:"azuracast"`
 }
@@ -326,8 +338,9 @@ type LyricsConfig struct {
 	URL string `yaml:"url"`
 }
 
-type SearchConfig struct {
-	Providers []string `yaml:"providers"`
+type MediaConfig struct {
+	BaseURL    string `yaml:"base_url"`
+	SigningKey string `yaml:"signing_key"`
 }
 
 type APIConfig struct {
@@ -352,6 +365,10 @@ type AzuraCastConfig struct {
 	Stations      []string      `yaml:"stations"`
 	PollInterval  time.Duration `yaml:"poll_interval"`
 	StreamBaseURL string        `yaml:"stream_base_url"`
+
+	LibrarySyncInterval    time.Duration `yaml:"library_sync_interval"`
+	LyricsBackfill         bool          `yaml:"lyrics_backfill"`
+	LyricsBackfillInterval time.Duration `yaml:"lyrics_backfill_interval"`
 }
 
 type BotConfig struct {

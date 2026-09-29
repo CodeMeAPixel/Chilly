@@ -103,7 +103,7 @@ export default async function Home() {
             <Tile className="md:col-span-4" title="A dashboard that's actually live" body="Switch stations, skip, seek and manage the queue from your browser. Changes show up instantly for everyone.">
               <QueuePreview />
             </Tile>
-            <Tile className="md:col-span-3" title="Your songs, too" body="Want something specific? /play finds it on YouTube, SoundCloud or Spotify, with lyrics and saved playlists.">
+            <Tile className="md:col-span-3" title="Your songs, too" body="Want something specific? /play any song, album or artist from our library, with lyrics and your own playlists.">
               <SearchPreview />
             </Tile>
             <Tile className="md:col-span-3" title="Built to stay up" body="Redundant audio servers with automatic failover, so the music keeps going.">
@@ -192,16 +192,16 @@ function Tile({ className, title, body, children }: { className?: string; title:
 
 function SearchPreview() {
   const results = [
-    { title: "Sunset Lover", author: "Petit Biscuit", source: "YT Music", time: "3:57" },
-    { title: "Sunset Lover (Live)", author: "Petit Biscuit", source: "YouTube", time: "4:12" },
-    { title: "Sunset Lover", author: "Petit Biscuit", source: "SoundCloud", time: "3:58" },
+    { title: "Sunset Lover", author: "Petit Biscuit", source: "Presence", time: "3:57" },
+    { title: "Problems", author: "Petit Biscuit", source: "Presence", time: "3:33" },
+    { title: "Beam Me Up", author: "Petit Biscuit", source: "Presence", time: "3:44" },
   ];
   return (
     <div className="rounded-2xl border border-border bg-surface p-3">
       <div className="flex items-center gap-2 rounded-xl bg-surface-2 px-3 py-2.5 text-sm">
         <Search className="h-4 w-4 text-muted" />
         <span className="font-mono text-xs text-primary">/search</span>
-        <span>sunset lover</span>
+        <span>petit biscuit</span>
         <span className="h-4 w-px animate-pulse bg-fg" />
       </div>
       <ul className="mt-2 space-y-1">

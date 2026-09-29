@@ -305,19 +305,6 @@ func (p *Player) OnTrackEnd(ctx context.Context, event lavalink.TrackEndEvent) e
 	return nil
 }
 
-func (p *Player) ReplaceFailed(ctx context.Context, failed lavalink.Track, alternative lavalink.Track) (bool, error) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	if p.current == nil || !SameTrack(*p.current, failed) {
-		return false, nil
-	}
-	if err := p.playLocked(ctx, alternative); err != nil {
-		return false, err
-	}
-	p.changed()
-	return true, nil
-}
-
 func (p *Player) IsCurrent(track lavalink.Track) bool {
 	p.mu.Lock()
 	defer p.mu.Unlock()

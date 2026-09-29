@@ -1,0 +1,47 @@
+server:
+  port: 2401
+  address: 0.0.0.0
+  http2:
+    enabled: false
+
+lavalink:
+  server:
+    password: ""
+    sources:
+      youtube: false
+      bandcamp: false
+      soundcloud: false
+      twitch: false
+      vimeo: false
+      nico: false
+      http: true
+      local: false
+    bufferDurationMs: 400
+    frameBufferDurationMs: 5000
+    opusEncodingQuality: 10
+    resamplingQuality: LOW
+    trackStuckThresholdMs: 10000
+    useSeekGhosting: true
+    playerUpdateInterval: 5
+    gc-warnings: true
+    timeouts:
+      connectTimeoutMs: 5000
+      connectionRequestTimeoutMs: 5000
+      socketTimeoutMs: 15000
+
+logging:
+  file:
+    path: ./logs/
+  level:
+    root: INFO
+    lavalink: INFO
+  request:
+    enabled: true
+    includeClientInfo: true
+    includeHeaders: false
+    includeQueryString: false
+    includePayload: false
+  logback:
+    rollingpolicy:
+      max-file-size: 50MB
+      max-history: 7

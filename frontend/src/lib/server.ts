@@ -1,6 +1,6 @@
 import "server-only";
 import { cookies } from "next/headers";
-import type { Me, Stats, Station, SystemStatus } from "./types";
+import type { LibrarySummary, Me, Stats, Station, SystemStatus } from "./types";
 
 export const SESSION_COOKIE = "chilly_session";
 
@@ -35,6 +35,10 @@ export function getStatus() {
 export async function getStations() {
   const res = await backend<{ stations: Station[] }>("/radio/stations");
   return res?.stations ?? null;
+}
+
+export function getLibrarySummary() {
+  return backend<LibrarySummary>("/library/summary");
 }
 
 export async function getSession() {

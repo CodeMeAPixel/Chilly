@@ -121,3 +121,37 @@ func (s *Server) stayStopGuard(w http.ResponseWriter, r *http.Request, a guildAc
 	}
 	return true
 }
+
+func (s *Server) handleStepStation(w http.ResponseWriter, r *http.Request, sess *Session) {
+	a, _, ok := s.controlAccess(w, r, sess)
+	if !ok {
+		return
+	}
+	var req struct {
+		Direction string `json:"direction"`
+	}
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	step := 1
+	switch req.Direction {
+	case "next":
+	case "previous":
+		step = -1
+	default:
+		writeError(w, http.StatusBadRequest, "bad_request", "direction must be next or previous")
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+	defer cancel()
+	if _, err := s.bot.StepStation(ctx, a.guildID, sess.UserID, step, a.canManage); err != nil {
+		switch {
+		case errors.Is(err, musicbot.ErrNotRadio), errors.Is(err, musicbot.ErrNoOtherStation):
+			writeError(w, http.StatusConflict, "not_radio", err.Error())
+		default:
+			s.playerError(w, err)
+		}
+		return
+	}
+	writeJSON(w, http.StatusOK, s.snapshot(a, queueLimit(r)))
+}

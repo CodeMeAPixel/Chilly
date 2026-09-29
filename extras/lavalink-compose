@@ -1,0 +1,20 @@
+services:
+  lavalink:
+    image: ghcr.io/lavalink-devs/lavalink:4
+    restart: unless-stopped
+    environment:
+      _JAVA_OPTIONS: "${_JAVA_OPTIONS:--Xmx6G}"
+      LAVALINK_SERVER_PASSWORD: "${LAVALINK_SERVER_PASSWORD:?set LAVALINK_SERVER_PASSWORD to a long random value}"
+      SERVER_PORT: "${SERVER_PORT:-2333}"
+    volumes:
+      - "../files/application.yml:/opt/Lavalink/application.yml:ro"
+    expose:
+      - ${SERVER_PORT}
+
+    healthcheck:
+      test: >
+        sh -c 'wget --header="Authorization: ${LAVALINK_SERVER_PASSWORD}" -qO- http://127.0.0.1:${SERVER_PORT}/v4/info >/dev/null 2>&1 || exit 1'
+      interval: 100s
+      timeout: 5s
+      retries: 5
+      start_period: 30s

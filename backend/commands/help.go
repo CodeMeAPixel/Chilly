@@ -40,7 +40,8 @@ func (c *Commands) Help(_ discord.SlashCommandInteractionData, e *handler.Comman
 		SetDescription(fmt.Sprintf("24/7 radio for your Discord server. Browse stations and control the player from the web at **[%s](%s)**.", c.SiteHost(), c.SiteURL("/radio")))
 	if c.Radio != nil {
 		embed.AddField("📻 Radio", "`/radio play` `/radio now` `/radio stations`", false).
-			AddField("🌙 24/7", "`/247 on` `/247 off` `/247 status` · keep a station playing in a channel around the clock", false)
+			AddField("🌙 24/7", "`/247 on` `/247 off` `/247 status` · keep a station playing in a channel around the clock", false).
+			AddField("🙋 Requests", "`/request` `/suggest` `/requests` · ask a station to play a song, or suggest one for the library", false)
 	}
 	embed.AddField("🎵 Music", "`/play` `/search` `/playlist` `/queue` `/now` `/lyrics` `/pause` `/resume` `/seek` `/skip` `/stop` `/shuffle` `/loop` `/remove`", false).
 		AddField("Playlists", "`/list create` `/list add` `/list remove` `/list delete` `/list list`", false).

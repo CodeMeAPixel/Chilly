@@ -3,6 +3,7 @@ package main
 import (
 	"io"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -239,6 +240,11 @@ func main() {
 			r.SlashCommand("/stations", cmds.RadioStations)
 		})
 		commandCreates = append(commandCreates, commands.StayCommand)
+		commandCreates = append(commandCreates, commands.RequestCommands...)
+		r.SlashCommand("/request", cmds.Request)
+		r.Autocomplete("/request", cmds.RequestAutocomplete)
+		r.SlashCommand("/suggest", cmds.Suggest)
+		r.SlashCommand("/requests", cmds.MyRequests)
 		r.Route("/247", func(r handler.Router) {
 			r.SlashCommand("/on", cmds.StayOn)
 			r.Autocomplete("/on", cmds.RadioStationAutocomplete)
@@ -311,7 +317,12 @@ func main() {
 		disgolink.WithListenerFunc(hdlr.OnWebSocketClosed),
 	)
 	b.PlayerManager = musicbot.NewPlayerManager(b.Lavalink)
-	b.Searcher = musicbot.NewSearcher(b.Lavalink, cfg.Search.Providers)
+	var library *musicbot.Library
+	if b.Radio != nil {
+		library = musicbot.NewLibrary(b.Radio.Client(), b.Radio.Shortcodes)
+		b.Media = newMediaSigner(cfg)
+	}
+	b.Searcher = musicbot.NewSearcher(b.Lavalink, library, b.Media)
 	b.Lyrics = musicbot.NewLyricsClient(cfg.Lyrics.URL)
 
 	b.Db, err = musicbot.NewDB(cfg.DB, DBschema)
@@ -339,6 +350,43 @@ func main() {
 	if b.Radio != nil {
 		b.Radio.OnSongChange(hdlr.OnRadioSongChange)
 		go b.Radio.Run(ctx)
+		if library != nil {
+			b.Requests = musicbot.NewRequests(cfg.Requests, b.Db, b.Radio.Client(), library, b.SendDM, b.SiteURL)
+			b.Radio.OnSongChange(func(np azuracast.NowPlaying) {
+				songID := ""
+				if np.NowPlaying != nil {
+					songID = np.NowPlaying.Song.ID
+				}
+				reqCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+				defer cancel()
+				b.Requests.OnSongChange(reqCtx, np.Station.Shortcode, songID)
+			})
+			library.OnSync(func() {
+				matchCtx, cancel := context.WithTimeout(ctx, time.Minute)
+				defer cancel()
+				if matched, err := b.Requests.MatchSuggestions(matchCtx); err != nil {
+					slog.Warn("failed to match suggestions to the library", slog.Any("error", err))
+				} else if matched > 0 {
+					slog.Info("suggestions added to the library", slog.Int("count", matched))
+				}
+			})
+			library.OnSync(func() {
+				linkCtx, cancel := context.WithTimeout(ctx, time.Minute)
+				defer cancel()
+				linked, err := b.Db.LinkLegacyPlaylistTracks(linkCtx, library)
+				if err != nil {
+					slog.Warn("failed to link playlist songs to the library", slog.Any("error", err))
+				} else if linked > 0 {
+					slog.Info("linked playlist songs to the library", slog.Int("songs", linked))
+				}
+			})
+			go library.Run(ctx, cfg.AzuraCast.LibrarySyncInterval)
+			if cfg.AzuraCast.LyricsBackfill {
+				b.Backfill = musicbot.NewLyricsBackfill(library, b.Lyrics, b.Radio.Client(), b.Db)
+				go b.Backfill.Run(ctx, cfg.AzuraCast.LyricsBackfillInterval)
+				slog.Info("lyrics backfill enabled", slog.Duration("interval", cfg.AzuraCast.LyricsBackfillInterval))
+			}
+		}
 		go b.RunStaySupervisor(ctx)
 		slog.Info("azuracast radio enabled", slog.String("url", cfg.AzuraCast.URL))
 	}
@@ -424,9 +472,32 @@ func checkNodeSources(ctx context.Context, b *musicbot.Bot) {
 		slog.Any("plugins", plugins),
 	)
 
-	kept, dropped := b.Searcher.FilterSupported(info.SourceManagers)
-	if len(dropped) > 0 {
-		slog.Warn("search providers not supported by lavalink node were disabled",
-			slog.Any("disabled", dropped), slog.Any("active", kept))
+	if !slices.Contains(info.SourceManagers, "http") {
+		slog.Error("lavalink node has the http source disabled; stations and library songs can't play",
+			slog.String("node", node.Config().Name))
 	}
+}
+
+func newMediaSigner(cfg musicbot.Config) *musicbot.MediaSigner {
+	if cfg.AzuraCast.APIKey == "" {
+		slog.Warn("AZURACAST_API_KEY is not set; the music library and /play won't work")
+	}
+	if !cfg.API.Enabled {
+		slog.Warn("the API is disabled; Lavalink can't fetch library songs until API_ENABLED=true")
+	}
+	baseURL := cfg.Media.BaseURL
+	if baseURL == "" {
+		baseURL = cfg.API.PublicURL
+		if baseURL == "" {
+			slog.Warn("MEDIA_BASE_URL is not set; library playback is disabled")
+			return nil
+		}
+		slog.Warn("MEDIA_BASE_URL is not set, falling back to API_PUBLIC_URL; point it at this bot directly so seeking works",
+			slog.String("url", baseURL))
+	}
+	secret := cfg.Media.SigningKey
+	if secret == "" {
+		secret = cfg.Bot.Token
+	}
+	return musicbot.NewMediaSigner(secret, baseURL)
 }

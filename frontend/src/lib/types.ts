@@ -80,9 +80,18 @@ export type PlaylistTrack = {
   added_at: string;
   added_by: string;
   track: Track;
+  available: boolean;
+  album?: string;
 };
 
-export type SearchResult = Track & { value: string };
+export type LibraryPlaylist = {
+  name: string;
+  track_count: number;
+  art?: string;
+  artists: string[];
+};
+
+export type SearchResult = Track & { value: string; album?: string; station?: string; playlists?: string[] };
 
 export type Stats = {
   guilds: number;
@@ -198,6 +207,15 @@ export type AdminOverview = {
   players: number;
   playing: number;
   radio: { enabled: boolean; healthy: boolean; last_poll?: string; stations: number; online: number };
+  library: LibraryStatus;
+  lyrics_backfill: {
+    enabled: boolean;
+    last_run?: string;
+    written: number;
+    not_found: number;
+    pending: number;
+    last_error?: string;
+  };
   stays: Stay[];
   nodes: NodeInfo[];
 };
@@ -221,16 +239,27 @@ export type AdminGuild = {
   stay: Stay | null;
 };
 
-export type AdminSearchResult = {
-  node: string;
-  identifier: string;
-  took_ms: number;
-  load_type: string;
-  playlist?: string;
-  total?: number;
+export type LibraryStatus = {
+  enabled: boolean;
+  tracks: number;
+  last_sync?: string;
   error?: string;
-  cause?: string;
-  tracks: { title: string; author: string; length_ms: number; uri?: string; source: string; is_stream: boolean }[];
+  media_url?: string;
+};
+
+export type AdminSearchResult = {
+  total: number;
+  tracks: SearchResult[];
+  library: LibraryStatus;
+  playback_test?: {
+    node: string;
+    track: string;
+    took_ms: number;
+    ok: boolean;
+    length_ms?: number;
+    error?: string;
+    cause?: string;
+  };
 };
 
 export type LogEntry = {
@@ -238,4 +267,60 @@ export type LogEntry = {
   level: "DEBUG" | "INFO" | "WARN" | "ERROR" | string;
   message: string;
   attrs?: Record<string, string>;
+};
+
+export type RequestStatus = "queued" | "playing" | "played" | "expired";
+export type SuggestionStatus = "pending" | "reviewing" | "added" | "declined";
+
+export type SongRequest = {
+  id: number;
+  user_id: string;
+  guild_id?: string;
+  station: string;
+  media_key: string;
+  title: string;
+  artist: string;
+  art?: string;
+  source: "web" | "discord";
+  status: RequestStatus;
+  created_at: string;
+  played_at?: string;
+};
+
+export type SongSuggestion = {
+  id: number;
+  user_id: string;
+  artist: string;
+  title: string;
+  link?: string;
+  note?: string;
+  status: SuggestionStatus;
+  reason?: string;
+  library_key?: string;
+  reviewed_by?: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type LibraryGroupSummary = {
+  name: string;
+  artist?: string;
+  track_count: number;
+  art?: string;
+};
+
+export type LibrarySummary = {
+  tracks: number;
+  artists: number;
+  albums: number;
+  playlists: number;
+  synced_at?: string;
+  requests?: { cooldown_seconds: number; max_pending: number; max_open_suggestions: number };
+};
+
+export type LibraryPage = {
+  tracks: SearchResult[];
+  total: number;
+  page: number;
+  per_page: number;
 };

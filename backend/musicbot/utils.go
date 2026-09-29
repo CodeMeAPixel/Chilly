@@ -8,7 +8,6 @@ import (
 
 	"github.com/disgoorg/disgo/handler"
 	"github.com/disgoorg/disgolink/v3/lavalink"
-	"github.com/disgoorg/lavasrc-plugin"
 )
 
 const deleteAfter = 30
@@ -47,13 +46,6 @@ func Trim(s string, length int) string {
 		return string(r[:length-1]) + "…"
 	}
 	return s
-}
-
-func FormatTrack(track lavalink.Track) string {
-	var lavasrcInfo lavasrc.TrackInfo
-	_ = track.PluginInfo.Unmarshal(&lavasrcInfo)
-
-	return ""
 }
 
 func FormatTime(d lavalink.Duration) string {

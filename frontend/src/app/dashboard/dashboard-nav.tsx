@@ -1,6 +1,6 @@
 "use client";
 
-import { LayoutGrid, ListMusic, ShieldCheck } from "lucide-react";
+import { HandHeart, LayoutGrid, ListMusic, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { GuildAvatar } from "@/components/guild-avatar";
@@ -27,6 +27,9 @@ export function DashboardNav({ className }: { className?: string }) {
         </Link>
         <Link href="/dashboard/playlists" className={item("/dashboard/playlists", pathname.startsWith("/dashboard/playlists"))}>
           <ListMusic className="h-4 w-4" /> Playlists
+        </Link>
+        <Link href="/dashboard/requests" className={item("/dashboard/requests", pathname.startsWith("/dashboard/requests"))}>
+          <HandHeart className="h-4 w-4" /> My requests
         </Link>
         {me?.admin && (
           <Link href="/dashboard/admin" className={item("/dashboard/admin", pathname.startsWith("/dashboard/admin"))}>

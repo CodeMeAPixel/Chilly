@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { Button, Card, EmptyState, Input, Skeleton } from "@/components/ui";
 import { api, ApiError, json } from "@/lib/api";
 import type { Playlist } from "@/lib/types";
+import { StationPlaylists } from "./station-playlists";
 
 export function PlaylistIndex() {
   const queryClient = useQueryClient();
@@ -75,6 +76,8 @@ export function PlaylistIndex() {
           ))}
         </div>
       )}
+
+      <StationPlaylists />
     </div>
   );
 }
