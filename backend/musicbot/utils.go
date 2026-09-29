@@ -48,6 +48,22 @@ func Trim(s string, length int) string {
 	return s
 }
 
+func LoadFailureCause(ex lavalink.Exception) string {
+	var causes []string
+	for _, line := range strings.Split(ex.CauseStackTrace, "\n") {
+		if cause, ok := strings.CutPrefix(strings.TrimSpace(line), "Caused by: "); ok {
+			causes = append(causes, cause)
+		}
+	}
+	if len(causes) > 0 {
+		return strings.Join(causes, " <- ")
+	}
+	if ex.Cause != "" && !strings.Contains(ex.Cause, ex.Message) {
+		return ex.Cause
+	}
+	return ""
+}
+
 func FormatTime(d lavalink.Duration) string {
 	if d.Hours() < 1 {
 		return fmt.Sprintf("%02d:%02d", d.MinutesPart(), d.SecondsPart())

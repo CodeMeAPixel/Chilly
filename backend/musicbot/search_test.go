@@ -336,3 +336,24 @@ func TestLibraryHidesFolders(t *testing.T) {
 		t.Error("clearing hidden folders should bring every track back")
 	}
 }
+
+func TestLoadFailureCause(t *testing.T) {
+	trace := strings.Join([]string{
+		"com.sedmelluq.discord.lavaplayer.tools.FriendlyException: Something went wrong while looking up the track.",
+		"\tat lavalink.server.util.LoadingKt.loadAudioItem(loading.kt:20)",
+		"Caused by: java.lang.RuntimeException: Unknown file format.",
+		"\tat com.sedmelluq.Foo(Foo.java:1)",
+		"Caused by: java.io.IOException: Invalid status code 403",
+	}, "\n")
+	ex := lavalink.Exception{Message: "Something went wrong while looking up the track.", CauseStackTrace: trace}
+	want := "java.lang.RuntimeException: Unknown file format. <- java.io.IOException: Invalid status code 403"
+	if got := LoadFailureCause(ex); got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+	if got := LoadFailureCause(lavalink.Exception{Message: "boom", Cause: "java.net.SocketTimeoutException: Read timed out"}); got != "java.net.SocketTimeoutException: Read timed out" {
+		t.Errorf("plain cause: got %q", got)
+	}
+	if got := LoadFailureCause(lavalink.Exception{Message: "boom", Cause: "FriendlyException: boom"}); got != "" {
+		t.Errorf("redundant cause: got %q", got)
+	}
+}

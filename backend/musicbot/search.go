@@ -164,7 +164,10 @@ func (s *Searcher) loadOne(ctx context.Context, node disgolink.Node, lt LibraryT
 	track, ok := result.Data.(lavalink.Track)
 	if !ok {
 		if ex, isErr := result.Data.(lavalink.Exception); isErr {
-			return lavalink.Track{}, fmt.Errorf("lavalink could not load %q: %s", lt.Title, ex.Message)
+			if cause := LoadFailureCause(ex); cause != "" {
+				return lavalink.Track{}, fmt.Errorf("lavalink node %s could not load %q: %s (cause: %s)", node.Config().Name, lt.Title, ex.Message, Trim(cause, 500))
+			}
+			return lavalink.Track{}, fmt.Errorf("lavalink node %s could not load %q: %s", node.Config().Name, lt.Title, ex.Message)
 		}
 		return lavalink.Track{}, fmt.Errorf("unexpected load result %q for %q (is the lavalink http source enabled and MEDIA_BASE_URL reachable?)", result.LoadType, lt.Title)
 	}

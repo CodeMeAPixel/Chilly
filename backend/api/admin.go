@@ -349,9 +349,9 @@ func (s *Server) handleAdminSearch(w http.ResponseWriter, r *http.Request, _ *Se
 		test["error"] = "load type " + string(result.LoadType)
 		if ex, ok := result.Data.(lavalink.Exception); ok {
 			test["error"] = ex.Message
-			test["cause"] = ex.Cause
-			if ex.CauseStackTrace != "" {
-				test["cause"] = musicbot.Trim(ex.CauseStackTrace, 4000)
+			test["cause"] = musicbot.Trim(ex.CauseStackTrace, 4000)
+			if cause := musicbot.LoadFailureCause(ex); cause != "" {
+				test["error"] = ex.Message + "\nCaused by: " + cause
 			}
 		}
 	}
