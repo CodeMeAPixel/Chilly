@@ -26,6 +26,7 @@ const (
 	collectingMinSamples = 60
 	dailyRefreshEvery    = 5 * time.Minute
 	libraryStaleAfter    = 45 * time.Minute
+	statusStartupGrace   = 10 * time.Minute
 )
 
 type StatusStore interface {
@@ -199,6 +200,7 @@ type statusObservation struct {
 	id, name, group string
 	ok              bool
 	detail          string
+	pending         bool
 }
 
 func gatewayHealthy(status gateway.Status, latency time.Duration) bool {
@@ -225,7 +227,7 @@ func (s *Server) observe(ctx context.Context) []statusObservation {
 			gatewayDetail = gw.Status().String()
 		}
 	}
-	obs = append(obs, statusObservation{"discord", "Discord connection", "Core", gatewayOK, gatewayDetail})
+	obs = append(obs, statusObservation{"discord", "Discord connection", "Core", gatewayOK, gatewayDetail, false})
 
 	pingCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	dbErr := s.bot.Db.Ping(pingCtx)
@@ -234,7 +236,7 @@ func (s *Server) observe(ctx context.Context) []statusObservation {
 	if dbErr != nil {
 		dbDetail = "unreachable"
 	}
-	obs = append(obs, statusObservation{"database", "Database", "Core", dbErr == nil, dbDetail})
+	obs = append(obs, statusObservation{"database", "Database", "Core", dbErr == nil, dbDetail, false})
 
 	if s.bot.Radio != nil {
 		for _, np := range s.bot.Radio.Stations() {
@@ -245,15 +247,18 @@ func (s *Server) observe(ctx context.Context) []statusObservation {
 					detail += " · live DJ"
 				}
 			}
-			obs = append(obs, statusObservation{"station:" + np.Station.Shortcode, np.Station.Name, "Stations", np.IsOnline, detail})
+			obs = append(obs, statusObservation{"station:" + np.Station.Shortcode, np.Station.Name, "Stations", np.IsOnline, detail, false})
 		}
 
-		healthy, _ := s.bot.Radio.Healthy()
+		healthy, lastOK := s.bot.Radio.Healthy()
 		detail := "responding"
 		if !healthy {
 			detail = "unreachable"
 		}
-		obs = append(obs, statusObservation{"azuracast", "AzuraCast", "Services", healthy, detail})
+		obs = append(obs, statusObservation{
+			id: "azuracast", name: "AzuraCast", group: "Services", ok: healthy, detail: detail,
+			pending: lastOK.IsZero() && time.Since(s.bot.StartedAt) < statusStartupGrace,
+		})
 	}
 
 	if lib := s.bot.Searcher.Library(); lib != nil {
@@ -266,12 +271,15 @@ func (s *Server) observe(ctx context.Context) []statusObservation {
 		case !lastSync.IsZero():
 			detail = "sync failing"
 		}
-		obs = append(obs, statusObservation{"library", "Music library", "Services", ok, detail})
+		obs = append(obs, statusObservation{
+			id: "library", name: "Music library", group: "Services", ok: ok, detail: detail,
+			pending: lastSync.IsZero() && time.Since(s.bot.StartedAt) < statusStartupGrace,
+		})
 	}
 
 	for _, node := range s.nodes() {
 		ok := node.Status == string(disgolink.StatusConnected)
-		obs = append(obs, statusObservation{"node:" + node.Name, node.Name, "Audio nodes", ok, statusLabel(node.Status)})
+		obs = append(obs, statusObservation{"node:" + node.Name, node.Name, "Audio nodes", ok, statusLabel(node.Status), false})
 	}
 	return obs
 }
@@ -285,14 +293,19 @@ func (s *Server) sampleStatus(ctx context.Context) {
 	var events []*incidentEvent
 	t.mu.Lock()
 	t.checkedAt = now
+	pending := make(map[string]bool)
 	for _, o := range obs {
+		if o.pending {
+			pending[o.id] = true
+			continue
+		}
 		if ev := t.record(o.id, o.name, o.group, o.ok, o.detail, now); ev != nil {
 			events = append(events, ev)
 		}
 		samples = append(samples, musicbot.StatusSample{Component: o.id, Start: now.Truncate(statusBucketSize), Up: o.ok})
 	}
 	var orphaned []int64
-	if t.firstRound {
+	if t.firstRound && len(pending) == 0 {
 		for _, id := range t.openIncidents {
 			orphaned = append(orphaned, id)
 		}

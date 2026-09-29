@@ -106,3 +106,30 @@ func TestApplyIgnoresFilteredStations(t *testing.T) {
 		t.Error("allowed stations should be added")
 	}
 }
+
+func TestHealthyToleratesAMissedPoll(t *testing.T) {
+	s := NewService(Config{URL: "http://x", PollInterval: 15 * time.Second})
+	if healthy, last := s.Healthy(); healthy || !last.IsZero() {
+		t.Fatal("a service with no updates yet must not be healthy")
+	}
+
+	s.apply(NowPlaying{Station: Station{Shortcode: "a"}})
+	if healthy, _ := s.Healthy(); !healthy {
+		t.Fatal("a fresh update should be healthy")
+	}
+
+	s.mu.Lock()
+	s.lastOK = time.Now().Add(-20 * time.Second)
+	s.lastErr = fmt.Errorf("timeout")
+	s.mu.Unlock()
+	if healthy, _ := s.Healthy(); !healthy {
+		t.Error("one failed poll should not mark the service down")
+	}
+
+	s.mu.Lock()
+	s.lastOK = time.Now().Add(-time.Minute)
+	s.mu.Unlock()
+	if healthy, _ := s.Healthy(); healthy {
+		t.Error("three missed polls should mark the service down")
+	}
+}

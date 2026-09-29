@@ -30,6 +30,7 @@ type Service struct {
 	order     []string
 	lastErr   error
 	lastPoll  time.Time
+	lastOK    time.Time
 	listeners []SongChangeFunc
 	updates   map[chan struct{}]struct{}
 }
@@ -83,6 +84,7 @@ func (s *Service) apply(np NowPlaying) {
 		s.order = append(s.order, code)
 	}
 	s.lastPoll = time.Now()
+	s.lastOK = s.lastPoll
 	s.lastErr = nil
 	changed := known && songID(prev) != songID(np)
 	listeners := slices.Clone(s.listeners)
@@ -125,6 +127,9 @@ func (s *Service) poll(ctx context.Context) {
 	s.mu.Lock()
 	s.lastPoll = time.Now()
 	s.lastErr = err
+	if err == nil {
+		s.lastOK = s.lastPoll
+	}
 	if err != nil {
 		s.mu.Unlock()
 		slog.Warn("failed to poll azuracast", slog.Any("error", err))
@@ -192,7 +197,10 @@ func (s *Service) Station(key string) (NowPlaying, bool) {
 func (s *Service) Healthy() (bool, time.Time) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return s.lastErr == nil && !s.lastPoll.IsZero(), s.lastPoll
+	if s.lastOK.IsZero() {
+		return false, s.lastOK
+	}
+	return time.Since(s.lastOK) < 3*s.cfg.PollInterval, s.lastOK
 }
 
 func (s *Service) StreamURL(np NowPlaying) string {
