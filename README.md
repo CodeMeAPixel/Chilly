@@ -133,6 +133,7 @@ All routes live under `/api/v1`. Authenticated routes accept the session cookie 
 | --- | --- | --- |
 | `GET` | `/health`, `/stats`, `/status` | — |
 | `GET` | `/radio/stations`, `/radio/stations/{station}` | — |
+| `GET` | `/radio/events` (SSE) | — |
 | `GET` | `/media/{station}/{mediaId}?sig=` (used by Lavalink) | Signed link |
 | `GET` | `/library/playlists`, `/library/playlists/tracks?name=` | — |
 | `GET` | `/library/tracks?q=&artist=&album=&playlist=&sort=&page=`, `/library/artists`, `/library/albums`, `/library/summary` | — |

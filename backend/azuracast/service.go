@@ -31,6 +31,7 @@ type Service struct {
 	lastErr   error
 	lastPoll  time.Time
 	listeners []SongChangeFunc
+	updates   map[chan struct{}]struct{}
 }
 
 func NewService(cfg Config) *Service {
@@ -41,6 +42,57 @@ func NewService(cfg Config) *Service {
 		client:   NewClient(cfg.URL, cfg.APIKey),
 		cfg:      cfg,
 		stations: make(map[string]NowPlaying),
+		updates:  make(map[chan struct{}]struct{}),
+	}
+}
+
+func (s *Service) Subscribe() (<-chan struct{}, func()) {
+	ch := make(chan struct{}, 1)
+	s.mu.Lock()
+	s.updates[ch] = struct{}{}
+	s.mu.Unlock()
+	return ch, func() {
+		s.mu.Lock()
+		delete(s.updates, ch)
+		s.mu.Unlock()
+	}
+}
+
+func (s *Service) notifyLocked() {
+	for ch := range s.updates {
+		select {
+		case ch <- struct{}{}:
+		default:
+		}
+	}
+}
+
+func (s *Service) allowed(code string) bool {
+	return len(s.cfg.Stations) == 0 || slices.Contains(s.cfg.Stations, code)
+}
+
+func (s *Service) apply(np NowPlaying) {
+	code := np.Station.Shortcode
+	if code == "" || !s.allowed(code) {
+		return
+	}
+	s.mu.Lock()
+	prev, known := s.stations[code]
+	s.stations[code] = np
+	if !known {
+		s.order = append(s.order, code)
+	}
+	s.lastPoll = time.Now()
+	s.lastErr = nil
+	changed := known && songID(prev) != songID(np)
+	listeners := slices.Clone(s.listeners)
+	s.notifyLocked()
+	s.mu.Unlock()
+
+	if changed {
+		for _, fn := range listeners {
+			fn(np)
+		}
 	}
 }
 
@@ -52,6 +104,7 @@ func (s *Service) OnSongChange(fn SongChangeFunc) {
 
 func (s *Service) Run(ctx context.Context) {
 	s.poll(ctx)
+	go s.runLive(ctx)
 	ticker := time.NewTicker(s.cfg.PollInterval)
 	defer ticker.Stop()
 	for {
@@ -83,7 +136,7 @@ func (s *Service) poll(ctx context.Context) {
 	next := make(map[string]NowPlaying, len(all))
 	for _, np := range all {
 		code := np.Station.Shortcode
-		if len(s.cfg.Stations) > 0 && !slices.Contains(s.cfg.Stations, code) {
+		if !s.allowed(code) {
 			continue
 		}
 		order = append(order, code)
@@ -95,6 +148,7 @@ func (s *Service) poll(ctx context.Context) {
 	s.stations = next
 	s.order = order
 	listeners := slices.Clone(s.listeners)
+	s.notifyLocked()
 	s.mu.Unlock()
 
 	for _, np := range changed {

@@ -107,6 +107,7 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.Handle("POST "+p+"/suggestions", s.authed(s.handleCreateSuggestion))
 	mux.Handle("DELETE "+p+"/suggestions/{suggestionID}", s.authed(s.handleWithdrawSuggestion))
 	mux.HandleFunc("GET "+p+"/radio/stations", s.handleRadioStations)
+	mux.HandleFunc("GET "+p+"/radio/events", s.handleRadioEvents)
 	mux.HandleFunc("GET "+p+"/radio/stations/{station}", s.handleRadioStation)
 
 	s.adminRoutes(mux)

@@ -2,6 +2,8 @@ package api
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -141,8 +143,19 @@ func newStationView(np azuracast.NowPlaying, withHistory bool) stationView {
 	}
 	if withHistory {
 		v.History = np.SongHistory
+	} else if len(np.SongHistory) > 0 {
+		v.History = np.SongHistory[:min(len(np.SongHistory), 5)]
 	}
 	return v
+}
+
+func (s *Server) stationsPayload() map[string]any {
+	stations := s.bot.Radio.Stations()
+	views := make([]stationView, len(stations))
+	for i, np := range stations {
+		views[i] = newStationView(np, false)
+	}
+	return map[string]any{"stations": views, "server_time": time.Now().Unix()}
 }
 
 func (s *Server) handleRadioStations(w http.ResponseWriter, r *http.Request) {
@@ -150,12 +163,63 @@ func (s *Server) handleRadioStations(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "radio_disabled", "radio is not enabled")
 		return
 	}
-	stations := s.bot.Radio.Stations()
-	views := make([]stationView, len(stations))
-	for i, np := range stations {
-		views[i] = newStationView(np, false)
+	writeJSON(w, http.StatusOK, s.stationsPayload())
+}
+
+func (s *Server) handleRadioEvents(w http.ResponseWriter, r *http.Request) {
+	if s.bot.Radio == nil {
+		writeError(w, http.StatusNotFound, "radio_disabled", "radio is not enabled")
+		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"stations": views})
+	rc := http.NewResponseController(w)
+	h := w.Header()
+	h.Set("Content-Type", "text/event-stream")
+	h.Set("Cache-Control", "no-cache")
+	h.Set("Connection", "keep-alive")
+	h.Set("X-Accel-Buffering", "no")
+	w.WriteHeader(http.StatusOK)
+
+	updates, unsubscribe := s.bot.Radio.Subscribe()
+	defer unsubscribe()
+
+	send := func() error {
+		data, err := json.Marshal(s.stationsPayload())
+		if err != nil {
+			return err
+		}
+		if _, err := fmt.Fprintf(w, "event: stations\ndata: %s\n\n", data); err != nil {
+			return err
+		}
+		return rc.Flush()
+	}
+	if err := send(); err != nil {
+		return
+	}
+
+	heartbeat := time.NewTicker(20 * time.Second)
+	defer heartbeat.Stop()
+	for {
+		select {
+		case <-r.Context().Done():
+			return
+		case <-updates:
+			time.Sleep(250 * time.Millisecond)
+			select {
+			case <-updates:
+			default:
+			}
+			if err := send(); err != nil {
+				return
+			}
+		case <-heartbeat.C:
+			if _, err := fmt.Fprint(w, ": ping\n\n"); err != nil {
+				return
+			}
+			if err := rc.Flush(); err != nil {
+				return
+			}
+		}
+	}
 }
 
 func (s *Server) handleRadioStation(w http.ResponseWriter, r *http.Request) {

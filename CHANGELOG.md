@@ -27,7 +27,8 @@ Database changes are applied automatically on startup. Existing playlists are ke
 
 - 24/7 radio: `/247 on`, `/247 off` and `/247 status` keep a station playing in a voice channel even when it's empty. The setting survives restarts, and the bot rejoins and restarts the station on its own.
 - Station switching: while a station is playing, the player message's previous and next buttons and the dashboard's controls change stations. With 24/7 on, members with Manage Server move the 24/7 station too.
-- A redesigned radio page with search, filters, sorting, compact station cards and a sticky player bar with volume control.
+- A redesigned radio page with a spotlight for the selected station (big artwork, live progress, up next and recently played), compact station tiles, and a mini player when you scroll away.
+- Live station updates: the bot follows AzuraCast's real-time now-playing feed (polling stays as a fallback), and the radio page updates instantly over server-sent events (`GET /api/v1/radio/events`).
 - A "Keep it playing 24/7" option when sending a station to a server from the website, and a 24/7 banner with an off switch in the dashboard player.
 
 #### Library and playback

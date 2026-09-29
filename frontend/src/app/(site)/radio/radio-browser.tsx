@@ -1,19 +1,19 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Headphones, Moon, Pause, Play, Radio, Search, Send, Square, Users, Volume2, VolumeX } from "lucide-react";
+import { Headphones, History, Moon, Pause, Play, Radio, Search, Send, Square, Users, Volume2, VolumeX } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Badge, Button, Card, EmptyState, Equalizer, Input } from "@/components/ui";
+import { Badge, Button, EmptyState, Equalizer, Input } from "@/components/ui";
 import { useGuilds, useMe } from "@/hooks/use-me";
 import { api, ApiError, json, loginUrl } from "@/lib/api";
-import { cn, formatNumber } from "@/lib/format";
+import { cn, formatDuration, formatNumber, formatRelative } from "@/lib/format";
 import type { Song, Station } from "@/lib/types";
 
-type Filter = "all" | "on_air" | "live";
-type Sort = "popular" | "name";
+type Live = { stations: Station[]; server_time?: number; received_at: number };
 
 const volumeKey = "chilly:radio-volume";
+const liveKey = ["radio-live"];
 
 function readVolume() {
   try {
@@ -24,26 +24,68 @@ function readVolume() {
   }
 }
 
-function songLine(song: Song) {
-  if (song.artist && song.title) return `${song.artist} – ${song.title}`;
-  return song.text || song.title;
+function useNow(interval = 1000) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), interval);
+    return () => clearInterval(id);
+  }, [interval]);
+  return now;
+}
+
+function withReceipt(data: { stations: Station[]; server_time?: number }): Live {
+  return { ...data, received_at: Date.now() };
+}
+
+function useLiveStations(initial: Station[]) {
+  const queryClient = useQueryClient();
+  const query = useQuery({
+    queryKey: liveKey,
+    queryFn: async () => withReceipt(await api<{ stations: Station[]; server_time: number }>("/radio/stations")),
+    initialData: () => ({ stations: initial, received_at: Date.now() }),
+    refetchInterval: 60_000,
+  });
+
+  useEffect(() => {
+    const source = new EventSource("/api/v1/radio/events");
+    source.addEventListener("stations", (event) => {
+      queryClient.setQueryData(liveKey, withReceipt(JSON.parse((event as MessageEvent).data)));
+    });
+    return () => source.close();
+  }, [queryClient]);
+
+  return query.data;
+}
+
+function elapsedSeconds(station: Station, live: Live, now: number) {
+  const np = station.now_playing;
+  if (!np) return 0;
+  const offset = live.server_time ? live.server_time * 1000 - live.received_at : 0;
+  const elapsed = (now + offset) / 1000 - np.played_at;
+  if (!Number.isFinite(elapsed) || elapsed < 0) return np.elapsed;
+  return np.duration ? Math.min(elapsed, np.duration) : elapsed;
 }
 
 export function RadioBrowser({ initial }: { initial: Station[] }) {
-  const { data: stations = initial } = useQuery({
-    queryKey: ["stations"],
-    queryFn: async () => (await api<{ stations: Station[] }>("/radio/stations")).stations,
-    initialData: initial,
-    refetchInterval: 15_000,
-  });
-  const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState<Filter>("all");
-  const [sort, setSort] = useState<Sort>("popular");
+  const live = useLiveStations(initial);
+  const stations = live.stations;
+  const now = useNow();
+  const [selected, setSelected] = useState<string | null>(null);
   const [listening, setListening] = useState<string | null>(null);
   const [volume, setVolume] = useState(readVolume);
+  const [query, setQuery] = useState("");
+  const [spotlightVisible, setSpotlightVisible] = useState(true);
   const audio = useRef<HTMLAudioElement>(null);
+  const spotlightRef = useRef<HTMLDivElement>(null);
 
+  const ranked = useMemo(
+    () => [...stations].sort((a, b) => Number(b.online) - Number(a.online) || b.listeners - a.listeners || a.name.localeCompare(b.name)),
+    [stations],
+  );
+  const spotlight = stations.find((s) => s.shortcode === (selected ?? listening)) ?? ranked[0] ?? null;
   const current = stations.find((s) => s.shortcode === listening) ?? null;
+  const totalListeners = stations.reduce((sum, s) => sum + s.listeners, 0);
+  const onAir = stations.filter((s) => s.online).length;
 
   useEffect(() => {
     const el = audio.current;
@@ -69,35 +111,26 @@ export function RadioBrowser({ initial }: { initial: Station[] }) {
     } catch {}
   }, [volume]);
 
-  const counts = useMemo(
-    () => ({
-      all: stations.length,
-      on_air: stations.filter((s) => s.online).length,
-      live: stations.filter((s) => s.online && s.live.is_live).length,
-    }),
-    [stations],
-  );
-  const totalListeners = stations.reduce((sum, s) => sum + s.listeners, 0);
+  useEffect(() => {
+    const el = spotlightRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(([entry]) => setSpotlightVisible(entry.isIntersecting), { threshold: 0.2 });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
 
-  const visible = useMemo(() => {
+  const toggle = (code: string) => setListening((cur) => (cur === code ? null : code));
+
+  const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return stations
-      .filter((s) => (filter === "on_air" ? s.online : filter === "live" ? s.online && s.live.is_live : true))
-      .filter((s) => {
-        if (!q) return true;
-        const song = s.now_playing?.song;
-        return [s.name, s.description, s.shortcode, song?.title, song?.artist].some((v) => v?.toLowerCase().includes(q));
-      })
-      .sort((a, b) => {
-        if (sort === "name") return a.name.localeCompare(b.name);
-        if (a.online !== b.online) return a.online ? -1 : 1;
-        return b.listeners - a.listeners || a.name.localeCompare(b.name);
-      });
-  }, [stations, query, filter, sort]);
+    if (!q) return ranked;
+    return ranked.filter((s) => {
+      const song = s.now_playing?.song;
+      return [s.name, s.description, song?.title, song?.artist].some((v) => v?.toLowerCase().includes(q));
+    });
+  }, [ranked, query]);
 
-  const toggle = (station: Station) => setListening((cur) => (cur === station.shortcode ? null : station.shortcode));
-
-  if (stations.length === 0) {
+  if (stations.length === 0 || !spotlight) {
     return (
       <EmptyState icon={<Radio className="h-6 w-6" />} title="No stations yet" className="mt-10">
         Stations will show up here once they&apos;re configured.
@@ -111,7 +144,7 @@ export function RadioBrowser({ initial }: { initial: Station[] }) {
 
       <p className="mt-6 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted">
         <span>
-          <strong className="font-display text-base text-fg">{counts.on_air}</strong> of {counts.all} stations on air
+          <strong className="font-display text-base text-fg">{onAir}</strong> of {stations.length} stations on air
         </span>
         <span className="h-1 w-1 rounded-full bg-border" />
         <span className="flex items-center gap-1.5">
@@ -120,205 +153,296 @@ export function RadioBrowser({ initial }: { initial: Station[] }) {
         </span>
       </p>
 
-      <div className="mt-8 flex flex-col gap-3 md:flex-row md:items-center">
-        <div className="relative flex-1">
-          <Search className="pointer-events-none absolute top-1/2 left-4 h-4 w-4 -translate-y-1/2 text-muted" />
-          <Input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search stations, artists or songs"
-            className="pl-11"
-            aria-label="Search stations"
-          />
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="flex rounded-xl border border-border bg-surface p-1" role="tablist" aria-label="Filter stations">
-            {(
-              [
-                ["all", "All"],
-                ["on_air", "On air"],
-                ["live", "Live DJ"],
-              ] as const
-            ).map(([value, label]) => (
-              <button
-                key={value}
-                role="tab"
-                aria-selected={filter === value}
-                onClick={() => setFilter(value)}
-                className={cn(
-                  "flex h-9 cursor-pointer items-center gap-1.5 rounded-lg px-3 text-sm transition",
-                  filter === value ? "bg-primary-soft text-fg" : "text-muted hover:text-fg",
-                )}
-              >
-                {label}
-                <span className="font-mono text-xs text-muted">{counts[value]}</span>
-              </button>
-            ))}
-          </div>
-          <select
-            value={sort}
-            onChange={(e) => setSort(e.target.value as Sort)}
-            aria-label="Sort stations"
-            className="h-11 cursor-pointer rounded-xl border border-border bg-surface px-3 text-sm text-fg outline-none focus:ring-2 focus:ring-ring"
-          >
-            <option value="popular">Most listeners</option>
-            <option value="name">A–Z</option>
-          </select>
-        </div>
-      </div>
-
-      {visible.length === 0 ? (
-        <EmptyState icon={<Search className="h-6 w-6" />} title="No stations match" className="mt-6">
-          Try a different search or filter.
-        </EmptyState>
-      ) : (
-        <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {visible.map((station) => (
-            <StationCard
-              key={station.shortcode}
-              station={station}
-              listening={listening === station.shortcode}
-              onListen={() => toggle(station)}
-            />
-          ))}
-        </div>
-      )}
-
-      {current && (
-        <NowListeningBar
-          station={current}
+      <div ref={spotlightRef} className="mt-8">
+        <Spotlight
+          station={spotlight}
+          elapsed={elapsedSeconds(spotlight, live, now)}
+          listening={listening === spotlight.shortcode}
           volume={volume}
           onVolume={setVolume}
-          onStop={() => setListening(null)}
+          onToggle={() => toggle(spotlight.shortcode)}
         />
+      </div>
+
+      <section className="mt-12 space-y-4">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <h2 className="font-display text-2xl font-semibold tracking-tight">All stations</h2>
+          {stations.length > 6 && (
+            <div className="relative w-full sm:w-72">
+              <Search className="pointer-events-none absolute top-1/2 left-4 h-4 w-4 -translate-y-1/2 text-muted" />
+              <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search stations or songs" className="pl-11" />
+            </div>
+          )}
+        </div>
+        {filtered.length === 0 ? (
+          <EmptyState icon={<Search className="h-6 w-6" />} title="No stations match" />
+        ) : (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {filtered.map((station) => (
+              <StationTile
+                key={station.shortcode}
+                station={station}
+                active={spotlight.shortcode === station.shortcode}
+                listening={listening === station.shortcode}
+                progress={station.now_playing?.duration ? elapsedSeconds(station, live, now) / station.now_playing.duration : 0}
+                onSelect={() => setSelected(station.shortcode)}
+                onListen={() => {
+                  setSelected(station.shortcode);
+                  toggle(station.shortcode);
+                }}
+              />
+            ))}
+          </div>
+        )}
+      </section>
+
+      {current && !spotlightVisible && (
+        <MiniPlayer station={current} volume={volume} onVolume={setVolume} onStop={() => setListening(null)} />
       )}
-      {current && <div className="h-28" aria-hidden />}
+      {current && !spotlightVisible && <div className="h-24" aria-hidden />}
     </>
   );
 }
 
-function StationArt({ station, className }: { station: Station; className?: string }) {
+function Art({ station, className, iconClass }: { station: Station; className?: string; iconClass?: string }) {
   const art = station.live.is_live && station.live.art ? station.live.art : station.now_playing?.song.art;
   return art ? (
-    <img src={art} alt="" className={cn("rounded-2xl object-cover", className)} />
+    <img src={art} alt="" className={cn("object-cover", className)} />
   ) : (
-    <div className={cn("grid place-items-center rounded-2xl bg-accent-soft text-accent", className)}>
-      <Radio className="h-7 w-7" />
+    <div className={cn("grid place-items-center bg-accent-soft text-accent", className)}>
+      <Radio className={cn("h-1/3 w-1/3", iconClass)} />
     </div>
   );
 }
 
-function StationCard({ station, listening, onListen }: { station: Station; listening: boolean; onListen: () => void }) {
+function StatusBadge({ station }: { station: Station }) {
+  if (!station.online) return <Badge>Offline</Badge>;
+  if (station.live.is_live) return <Badge tone="accent">● Live · {station.live.streamer_name}</Badge>;
+  return <Badge tone="lime">On air</Badge>;
+}
+
+function Spotlight({
+  station,
+  elapsed,
+  listening,
+  volume,
+  onVolume,
+  onToggle,
+}: {
+  station: Station;
+  elapsed: number;
+  listening: boolean;
+  volume: number;
+  onVolume: (v: number) => void;
+  onToggle: () => void;
+}) {
   const np = station.now_playing;
+  const song = np?.song;
   const next = station.playing_next?.song;
+  const history = (station.song_history ?? []).slice(0, 4);
+  const art = station.live.is_live && station.live.art ? station.live.art : song?.art;
+  const pct = np?.duration ? Math.min(100, (elapsed / np.duration) * 100) : 0;
 
   return (
-    <Card
-      className={cn(
-        "flex flex-col overflow-hidden transition hover:border-primary/30",
-        listening && "border-primary/40 shadow-[0_0_60px_-25px_var(--primary)]",
-        !station.online && "opacity-70",
+    <div className="relative overflow-hidden rounded-4xl border border-border bg-surface">
+      {art && (
+        <img
+          src={art}
+          alt=""
+          aria-hidden
+          className="pointer-events-none absolute inset-0 h-full w-full scale-125 object-cover opacity-25 blur-3xl"
+        />
       )}
-    >
-      <div className="flex gap-4 p-4">
-        <button
-          onClick={onListen}
-          disabled={!station.online}
-          aria-label={listening ? `Stop listening to ${station.name}` : `Listen to ${station.name}`}
-          className="group relative h-20 w-20 shrink-0 cursor-pointer disabled:cursor-not-allowed"
-        >
-          <StationArt station={station} className="h-20 w-20" />
-          {station.online && (
-            <span
-              className={cn(
-                "absolute inset-0 grid place-items-center rounded-2xl bg-bg/55 backdrop-blur-[2px] transition",
-                listening ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100",
-              )}
-            >
-              {listening ? <Equalizer className="h-5" /> : <Play className="h-6 w-6 fill-current" />}
-            </span>
-          )}
-        </button>
-
-        <div className="min-w-0 flex-1">
-          <div className="flex items-start justify-between gap-2">
-            <h2 className="truncate font-display text-base leading-tight font-semibold">{station.name}</h2>
-            {station.online ? (
-              station.live.is_live ? (
-                <Badge tone="accent" className="shrink-0">● Live</Badge>
-              ) : (
-                <Badge tone="lime" className="shrink-0">On air</Badge>
-              )
-            ) : (
-              <Badge className="shrink-0">Offline</Badge>
+      <div className="relative grid grid-cols-1 gap-8 p-6 sm:p-8 lg:grid-cols-[minmax(0,1fr)_300px]">
+        <div className="flex flex-col gap-6 sm:flex-row sm:items-center">
+          <div className="relative mx-auto shrink-0 sm:mx-0">
+            <Art station={station} className="h-48 w-48 rounded-3xl shadow-2xl sm:h-56 sm:w-56" />
+            {listening && (
+              <span className="absolute right-3 bottom-3 rounded-xl bg-bg/80 p-2 backdrop-blur">
+                <Equalizer className="h-5" />
+              </span>
             )}
           </div>
-          {station.online && np ? (
-            <div className="mt-1.5 min-w-0">
-              <p className="truncate text-sm font-medium">{np.song.title || np.song.text}</p>
-              <p className="truncate text-xs text-muted">
-                {station.live.is_live ? `with ${station.live.streamer_name}` : np.song.artist}
-              </p>
+
+          <div className="min-w-0 flex-1 space-y-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-semibold tracking-wider text-primary uppercase">{station.name}</span>
+              <StatusBadge station={station} />
+              <span className="flex items-center gap-1 text-xs text-muted">
+                <Users className="h-3.5 w-3.5" /> {formatNumber(station.listeners)}
+              </span>
             </div>
-          ) : (
-            <p className="mt-1.5 line-clamp-2 text-xs text-muted">{station.description || "Nothing scheduled right now."}</p>
+
+            {station.online && song ? (
+              <div className="min-w-0 space-y-1">
+                <h2 className="line-clamp-2 font-display text-3xl leading-tight font-semibold tracking-tight sm:text-4xl">
+                  {song.title || song.text}
+                </h2>
+                <p className="truncate text-muted">{[song.artist, song.album].filter(Boolean).join(" · ")}</p>
+              </div>
+            ) : (
+              <div className="space-y-1">
+                <h2 className="font-display text-3xl font-semibold tracking-tight">{station.name}</h2>
+                <p className="text-muted">{station.online ? station.description : "This station is off air right now. Check back soon."}</p>
+              </div>
+            )}
+
+            {station.online && np?.duration ? (
+              <div className="space-y-1.5">
+                <div className="h-1.5 overflow-hidden rounded-full bg-surface-2">
+                  <div
+                    className="h-full rounded-full bg-linear-to-r from-primary to-accent transition-[width] duration-1000 ease-linear"
+                    style={{ width: `${pct}%` }}
+                  />
+                </div>
+                <div className="flex justify-between font-mono text-xs text-muted">
+                  <span>{formatDuration(elapsed * 1000)}</span>
+                  <span>{formatDuration(np.duration * 1000)}</span>
+                </div>
+              </div>
+            ) : null}
+
+            <div className="flex flex-wrap items-center gap-3">
+              <Button size="lg" variant={listening ? "secondary" : "primary"} onClick={onToggle} disabled={!station.online} className="rounded-full px-6">
+                {listening ? <Pause className="h-5 w-5 fill-current" /> : <Headphones className="h-5 w-5" />}
+                {listening ? "Stop" : "Listen"}
+              </Button>
+              <VolumeControl volume={volume} onVolume={onVolume} />
+              <SendToServer station={station} placement="down" />
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-5 border-t border-border pt-6 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-8">
+          {next && station.online && (
+            <div className="space-y-2">
+              <p className="text-xs font-medium tracking-wide text-muted uppercase">Up next</p>
+              <SongRow song={next} />
+            </div>
           )}
-          {station.online && np?.duration ? (
-            <SongProgress key={`${np.song.id}-${np.played_at}`} elapsed={np.elapsed} duration={np.duration} className="mt-3" />
-          ) : null}
+          <div className="space-y-2">
+            <p className="flex items-center gap-1.5 text-xs font-medium tracking-wide text-muted uppercase">
+              <History className="h-3.5 w-3.5" /> Recently played
+            </p>
+            {history.length === 0 ? (
+              <p className="text-sm text-muted">Nothing yet.</p>
+            ) : (
+              <ul className="space-y-2">
+                {history.map((h) => (
+                  <li key={`${h.played_at}-${h.song.id}`}>
+                    <SongRow song={h.song} meta={formatRelative(new Date(h.played_at * 1000).toISOString())} />
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         </div>
       </div>
-
-      <div className="mt-auto flex items-center gap-3 border-t border-border px-4 py-2.5 text-xs text-muted">
-        <span className="flex shrink-0 items-center gap-1.5" title={`${station.listeners} listening on the web and in Discord`}>
-          <Users className="h-3.5 w-3.5" />
-          <span className="font-mono text-fg">{formatNumber(station.listeners)}</span>
-        </span>
-        <span className="h-3 w-px shrink-0 bg-border" />
-        {station.online && next ? (
-          <span className="min-w-0 truncate">
-            <span className="text-muted/70">Next</span> <span className="text-fg/80">{songLine(next)}</span>
-          </span>
-        ) : (
-          <span className="truncate">{station.online ? "Always on" : "Back soon"}</span>
-        )}
-      </div>
-
-      <div className="border-t border-border bg-surface-2/40 px-2 py-1.5">
-        <Button
-          variant={listening ? "primary" : "ghost"}
-          size="sm"
-          onClick={onListen}
-          disabled={!station.online}
-          className="w-full"
-        >
-          {listening ? <Pause className="h-4 w-4" /> : <Headphones className="h-4 w-4" />}
-          {listening ? "Stop listening" : "Listen"}
-        </Button>
-      </div>
-    </Card>
+    </div>
   );
 }
 
-function SongProgress({ elapsed, duration, className }: { elapsed: number; duration: number; className?: string }) {
-  const [seconds, setSeconds] = useState(elapsed);
-
-  useEffect(() => {
-    const id = setInterval(() => setSeconds((s) => Math.min(s + 1, duration)), 1000);
-    return () => clearInterval(id);
-  }, [duration]);
-
+function SongRow({ song, meta }: { song: Song; meta?: string }) {
   return (
-    <div className={cn("h-1 overflow-hidden rounded-full bg-surface-2", className)}>
-      <div
-        className="h-full rounded-full bg-linear-to-r from-primary to-accent transition-[width] duration-1000 ease-linear"
-        style={{ width: `${Math.min(100, (seconds / duration) * 100)}%` }}
+    <div className="flex items-center gap-3">
+      {song.art ? (
+        <img src={song.art} alt="" className="h-10 w-10 shrink-0 rounded-lg object-cover" />
+      ) : (
+        <div className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-surface-2 text-muted">
+          <Radio className="h-4 w-4" />
+        </div>
+      )}
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-medium">{song.title || song.text}</p>
+        <p className="truncate text-xs text-muted">
+          {song.artist}
+          {meta && ` · ${meta}`}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function VolumeControl({ volume, onVolume }: { volume: number; onVolume: (v: number) => void }) {
+  const muted = volume === 0;
+  return (
+    <div className="flex items-center gap-2">
+      <button onClick={() => onVolume(muted ? 0.8 : 0)} aria-label={muted ? "Unmute" : "Mute"} className="cursor-pointer text-muted hover:text-fg">
+        {muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+      </button>
+      <input
+        type="range"
+        min={0}
+        max={1}
+        step={0.01}
+        value={volume}
+        onChange={(e) => onVolume(Number(e.target.value))}
+        aria-label="Volume"
+        className="w-24 accent-primary"
       />
     </div>
   );
 }
 
-function NowListeningBar({
+function StationTile({
+  station,
+  active,
+  listening,
+  progress,
+  onSelect,
+  onListen,
+}: {
+  station: Station;
+  active: boolean;
+  listening: boolean;
+  progress: number;
+  onSelect: () => void;
+  onListen: () => void;
+}) {
+  const song = station.now_playing?.song;
+  return (
+    <div
+      className={cn(
+        "group relative flex items-center gap-3 overflow-hidden rounded-3xl border bg-surface p-3 transition",
+        active ? "border-primary/50 shadow-[0_0_40px_-20px_var(--primary)]" : "border-border hover:border-primary/30",
+        !station.online && "opacity-60",
+      )}
+    >
+      <button onClick={onSelect} className="absolute inset-0 cursor-pointer" aria-label={`Show ${station.name}`} />
+      <Art station={station} className="h-16 w-16 shrink-0 rounded-2xl" />
+      <div className="pointer-events-none min-w-0 flex-1">
+        <p className="flex items-center gap-1.5 truncate text-sm font-semibold">
+          <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", station.online ? "bg-lime" : "bg-muted")} />
+          <span className="truncate">{station.name}</span>
+        </p>
+        <p className="truncate text-sm">{station.online && song ? song.title || song.text : "Off air"}</p>
+        <p className="flex items-center gap-2 truncate text-xs text-muted">
+          <span className="truncate">{station.online && song ? song.artist : station.description}</span>
+          <span className="flex shrink-0 items-center gap-1">
+            <Users className="h-3 w-3" /> {station.listeners}
+          </span>
+        </p>
+      </div>
+      <Button
+        variant={listening ? "primary" : "secondary"}
+        size="icon"
+        onClick={onListen}
+        disabled={!station.online}
+        aria-label={listening ? `Stop ${station.name}` : `Listen to ${station.name}`}
+        className="relative h-10 w-10 shrink-0 rounded-full"
+      >
+        {listening ? <Equalizer className="h-3.5" /> : <Play className="h-4 w-4 fill-current" />}
+      </Button>
+      {station.online && progress > 0 && (
+        <span className="pointer-events-none absolute right-0 bottom-0 left-0 h-0.5 bg-surface-2">
+          <span className="block h-full bg-linear-to-r from-primary to-accent" style={{ width: `${Math.min(100, progress * 100)}%` }} />
+        </span>
+      )}
+    </div>
+  );
+}
+
+function MiniPlayer({
   station,
   volume,
   onVolume,
@@ -330,12 +454,10 @@ function NowListeningBar({
   onStop: () => void;
 }) {
   const song = station.now_playing?.song;
-  const muted = volume === 0;
-
   return (
     <div className="fixed inset-x-3 bottom-3 z-30 sm:inset-x-6">
       <div className="mx-auto flex max-w-4xl items-center gap-3 rounded-3xl border border-border bg-surface/90 p-2.5 pr-3 shadow-2xl backdrop-blur-xl sm:gap-4">
-        <StationArt station={station} className="h-14 w-14 rounded-2xl" />
+        <Art station={station} className="h-14 w-14 shrink-0 rounded-2xl" />
         <div className="min-w-0 flex-1">
           <p className="flex items-center gap-1.5 text-[11px] font-semibold tracking-wider text-accent uppercase">
             <Equalizer className="h-2.5" /> {station.name}
@@ -343,26 +465,10 @@ function NowListeningBar({
           <p className="truncate text-sm font-medium">{song ? song.title || song.text : "Live stream"}</p>
           <p className="truncate text-xs text-muted">{song?.artist}</p>
         </div>
-        <div className="hidden items-center gap-2 sm:flex">
-          <button
-            onClick={() => onVolume(muted ? 0.8 : 0)}
-            aria-label={muted ? "Unmute" : "Mute"}
-            className="cursor-pointer text-muted hover:text-fg"
-          >
-            {muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
-          </button>
-          <input
-            type="range"
-            min={0}
-            max={1}
-            step={0.01}
-            value={volume}
-            onChange={(e) => onVolume(Number(e.target.value))}
-            aria-label="Volume"
-            className="w-24 accent-(--primary)"
-          />
+        <div className="hidden sm:block">
+          <VolumeControl volume={volume} onVolume={onVolume} />
         </div>
-        <SendToServer station={station} />
+        <SendToServer station={station} placement="up" />
         <Button variant="primary" size="icon" onClick={onStop} aria-label="Stop listening" className="h-11 w-11 rounded-2xl">
           <Square className="h-4 w-4 fill-current" />
         </Button>
@@ -371,7 +477,7 @@ function NowListeningBar({
   );
 }
 
-function SendToServer({ station }: { station: Station }) {
+function SendToServer({ station, placement }: { station: Station; placement: "up" | "down" }) {
   const { data: me } = useMe();
   const [open, setOpen] = useState(false);
   const [stay, setStay] = useState(false);
@@ -393,7 +499,7 @@ function SendToServer({ station }: { station: Station }) {
     return (
       <a
         href={loginUrl("/radio")}
-        className="inline-flex h-8 items-center gap-1.5 rounded-lg px-3 text-sm text-muted hover:bg-surface-2 hover:text-fg"
+        className="inline-flex h-10 items-center gap-1.5 rounded-xl px-3 text-sm text-muted hover:bg-surface-2 hover:text-fg"
         title="Log in to play in your server"
       >
         <Send className="h-4 w-4" /> <span className="hidden sm:inline">Play in server</span>
@@ -425,18 +531,18 @@ function SendToServer({ station }: { station: Station }) {
 
   return (
     <div ref={ref} className="relative">
-      <Button variant="ghost" size="sm" onClick={() => setOpen((v) => !v)} disabled={!station.online} aria-expanded={open}>
+      <Button variant="ghost" onClick={() => setOpen((v) => !v)} disabled={!station.online} aria-expanded={open}>
         <Send className="h-4 w-4" /> <span className="hidden sm:inline">Play in server</span>
       </Button>
       {open && (
-        <div className="absolute right-0 bottom-full z-40 mb-3 w-72 max-w-[calc(100vw-2rem)] rounded-2xl border border-border bg-surface p-2 shadow-2xl">
+        <div
+          className={cn(
+            "absolute z-40 w-72 max-w-[calc(100vw-2rem)] rounded-2xl border border-border bg-surface p-2 shadow-2xl",
+            placement === "up" ? "right-0 bottom-full mb-3" : "top-full left-0 mt-2 sm:right-auto",
+          )}
+        >
           <label className="flex cursor-pointer items-start gap-3 rounded-xl px-3 py-2.5 hover:bg-surface-2">
-            <input
-              type="checkbox"
-              checked={stay}
-              onChange={(e) => setStay(e.target.checked)}
-              className="mt-0.5 h-4 w-4 accent-(--primary)"
-            />
+            <input type="checkbox" checked={stay} onChange={(e) => setStay(e.target.checked)} className="mt-0.5 h-4 w-4 accent-primary" />
             <span className="text-sm">
               <span className="flex items-center gap-1.5 font-medium">
                 <Moon className="h-3.5 w-3.5 text-primary" /> Keep it playing 24/7
