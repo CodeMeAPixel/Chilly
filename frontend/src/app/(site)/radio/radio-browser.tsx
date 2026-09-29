@@ -172,7 +172,7 @@ export function RadioBrowser({ initial }: { initial: Station[] }) {
           Try a different search or filter.
         </EmptyState>
       ) : (
-        <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {visible.map((station) => (
             <StationCard
               key={station.shortcode}

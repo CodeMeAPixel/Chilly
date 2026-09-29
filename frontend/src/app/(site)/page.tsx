@@ -21,7 +21,7 @@ export default async function Home() {
       <section className="grain relative -mt-18 overflow-hidden">
         <Blobs />
         <div className="pointer-events-none absolute inset-x-0 bottom-0 h-48 bg-linear-to-b from-transparent to-bg" />
-        <div className="relative mx-auto grid max-w-6xl items-center gap-16 px-4 pt-34 pb-24 sm:px-6 lg:grid-cols-[1.1fr_1fr] lg:pt-42 lg:pb-32">
+        <div className="relative mx-auto grid max-w-6xl grid-cols-1 items-center gap-16 px-4 pt-34 pb-24 sm:px-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] lg:pt-42 lg:pb-32">
           <div className="space-y-8">
             <Link
               href="/status"
@@ -90,7 +90,7 @@ export default async function Home() {
         <div className="mx-auto max-w-6xl px-4 pt-8 pb-24 sm:px-6">
           <SectionHeading eyebrow="What it does" title="Press play once. It never stops." />
 
-          <div className="mt-12 grid gap-4 md:grid-cols-6">
+          <div className="mt-12 grid grid-cols-1 gap-4 md:grid-cols-6">
             <Tile className="md:col-span-4" title="Stations for every mood" body="Lo-fi, hip-hop, late-night mixes and more, streaming around the clock with live now-playing in your channel.">
               <StationsPreview stations={liveStations} />
             </Tile>
@@ -393,7 +393,7 @@ function HeroStations({ stations }: { stations: Station[] }) {
 function StationsPreview({ stations }: { stations: Station[] }) {
   if (stations.length === 0) {
     return (
-      <div className="grid gap-2 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         {[0, 1, 2, 3].map((i) => (
           <div key={i} className="h-[74px] rounded-2xl border border-dashed border-border" />
         ))}
@@ -401,7 +401,7 @@ function StationsPreview({ stations }: { stations: Station[] }) {
     );
   }
   return (
-    <div className="grid gap-2 sm:grid-cols-2">
+    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
       {stations.slice(0, 4).map((station) => (
         <div key={station.shortcode} className="flex items-center gap-3 rounded-2xl border border-border bg-surface p-3">
           {station.now_playing?.song.art ? (

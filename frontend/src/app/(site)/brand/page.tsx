@@ -59,7 +59,7 @@ export default function BrandPage() {
 
       <section className="space-y-5">
         <SectionTitle title="Logo" body="The popsicle mark works on its own or next to the name." />
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
           <LogoTile tone="dark" />
           <LogoTile tone="light" />
           <Card className="flex flex-col justify-between gap-4 p-6">
@@ -84,7 +84,7 @@ export default function BrandPage() {
 
       <section className="space-y-5">
         <SectionTitle title="Colours" body="A cool mint base with warm pink and peach accents. Click a value to copy it." />
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {colors.map((c) => (
             <Card key={c.name} className="overflow-hidden">
               <div className="flex h-24 items-end p-4" style={{ background: c.hex, color: c.text }}>
@@ -101,7 +101,7 @@ export default function BrandPage() {
 
       <section className="space-y-5">
         <SectionTitle title="Typography" body="Both families are free on Google Fonts." />
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <Card className="space-y-2 p-6">
             <p className="text-xs text-muted">Display · Fredoka SemiBold</p>
             <p className="font-display text-5xl font-semibold tracking-tight">Always on air</p>
@@ -138,7 +138,7 @@ export default function BrandPage() {
         </Card>
       </section>
 
-      <section className="grid gap-4 md:grid-cols-2">
+      <section className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <RuleList title="Do" items={dos} good />
         <RuleList title="Don't" items={donts} />
       </section>
