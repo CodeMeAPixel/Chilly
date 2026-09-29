@@ -93,3 +93,51 @@ func TestMediaProxyEmulatesRangesWhenUpstreamCannot(t *testing.T) {
 		t.Errorf("plain request: %d %q", rec.Code, rec.Body.String())
 	}
 }
+
+func TestMediaProxyServesRangesFromCache(t *testing.T) {
+	const file = "0123456789abcdefghij"
+	var requests atomic.Int32
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests.Add(1)
+		if r.Header.Get("Range") != "" {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Length", "20")
+		_, _ = io.WriteString(w, file)
+	}))
+	defer upstream.Close()
+
+	radio := azuracast.NewService(azuracast.Config{URL: upstream.URL})
+	cache, err := musicbot.NewMediaCache(t.TempDir(), 1<<20, radio.Client())
+	if err != nil {
+		t.Fatal(err)
+	}
+	signer := musicbot.NewMediaSigner("secret", "http://bot")
+	s := &Server{bot: &musicbot.Bot{Media: signer, MediaCache: cache, Radio: radio}}
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v1/media/{station}/{mediaID}", s.handleMedia)
+	path := strings.TrimPrefix(signer.URL("s3station", 1), "http://bot")
+
+	for _, c := range []struct {
+		rng, body, contentRange string
+		code                    int
+	}{
+		{"bytes=5-9", "56789", "bytes 5-9/20", http.StatusPartialContent},
+		{"bytes=15-", "fghij", "bytes 15-19/20", http.StatusPartialContent},
+		{"", file, "", http.StatusOK},
+	} {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		if c.rng != "" {
+			req.Header.Set("Range", c.rng)
+		}
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+		if rec.Code != c.code || rec.Body.String() != c.body || rec.Header().Get("Content-Range") != c.contentRange {
+			t.Errorf("range %q: got %d %q %q", c.rng, rec.Code, rec.Body.String(), rec.Header().Get("Content-Range"))
+		}
+	}
+	if n := requests.Load(); n != 1 {
+		t.Errorf("expected a single download from the library, got %d", n)
+	}
+}

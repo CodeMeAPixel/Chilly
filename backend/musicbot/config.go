@@ -71,6 +71,9 @@ func defaultConfig() Config {
 			CookieSecure: true,
 			SessionTTL:   7 * 24 * time.Hour,
 		},
+		Media: MediaConfig{
+			CacheMaxMB: 2048,
+		},
 		Requests: RequestConfig{
 			Cooldown:           5 * time.Minute,
 			MaxPending:         3,
@@ -152,6 +155,8 @@ func loadFromEnvironment(cfg *Config) error {
 	cfg.Requests.MaxOpenSuggestions = parseIntEnv("SUGGESTION_MAX_OPEN", cfg.Requests.MaxOpenSuggestions)
 	cfg.Media.BaseURL = strings.TrimRight(getenv("MEDIA_BASE_URL", cfg.Media.BaseURL), "/")
 	cfg.Media.SigningKey = getenv("MEDIA_SIGNING_KEY", cfg.Media.SigningKey)
+	cfg.Media.CacheDir = getenv("MEDIA_CACHE_DIR", cfg.Media.CacheDir)
+	cfg.Media.CacheMaxMB = parseIntEnv("MEDIA_CACHE_MAX_MB", cfg.Media.CacheMaxMB)
 
 	cfg.API.Enabled = parseBoolEnv("API_ENABLED", cfg.API.Enabled)
 	cfg.API.Address = getenv("API_ADDRESS", cfg.API.Address)
@@ -342,6 +347,8 @@ type LyricsConfig struct {
 type MediaConfig struct {
 	BaseURL    string `yaml:"base_url"`
 	SigningKey string `yaml:"signing_key"`
+	CacheDir   string `yaml:"cache_dir"`
+	CacheMaxMB int    `yaml:"cache_max_mb"`
 }
 
 type APIConfig struct {

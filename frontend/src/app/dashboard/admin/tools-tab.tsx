@@ -135,6 +135,7 @@ export function ToolsTab() {
                   {test.length_ms ? ` · ${formatDuration(test.length_ms)}` : ""}
                 </span>
               </p>
+              {test.cache && <p className="mt-1 font-mono text-xs text-muted">media cache: {test.cache}</p>}
               {test.error && (
                 <pre className="mt-2 max-h-48 overflow-auto font-mono text-xs whitespace-pre-wrap text-danger">
                   {test.error}

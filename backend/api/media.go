@@ -8,6 +8,9 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
+
+	"github.com/CodeMeAPixel/Chilly/azuracast"
 )
 
 var mediaHeaders = []string{"Content-Type", "Content-Length", "Content-Range", "Accept-Ranges", "Last-Modified", "ETag"}
@@ -65,6 +68,10 @@ func (s *Server) handleMedia(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.Atoi(r.PathValue("mediaID"))
 	if err != nil || id <= 0 || !s.bot.Media.Verify(station, id, r.URL.Query().Get("sig")) {
 		writeError(w, http.StatusForbidden, "forbidden", "invalid media link")
+		return
+	}
+
+	if s.serveCachedMedia(w, r, station, id) {
 		return
 	}
 
@@ -129,6 +136,31 @@ func (s *Server) handleMedia(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_, _ = io.Copy(w, upstream.Body)
+}
+
+func (s *Server) serveCachedMedia(w http.ResponseWriter, r *http.Request, station string, id int) bool {
+	cache := s.bot.MediaCache
+	if cache == nil {
+		return false
+	}
+	f, err := cache.Open(r.Context(), station, id)
+	if err != nil {
+		var status *azuracast.StatusError
+		switch {
+		case errors.As(err, &status) && status.Status == http.StatusNotFound:
+			writeError(w, http.StatusNotFound, "not_found", "that song is no longer in the library")
+			return true
+		case r.Context().Err() != nil:
+			return true
+		}
+		slog.Warn("media cache unavailable, streaming from the music library",
+			slog.String("station", station), slog.Int("id", id), slog.Any("error", err))
+		return false
+	}
+	defer f.Close()
+	w.Header().Set("Cache-Control", "private, no-store")
+	http.ServeContent(w, r, "", time.Time{}, f)
+	return true
 }
 
 func serveRangeFromFull(w http.ResponseWriter, r *http.Request, upstream *http.Response, rangeHeader string) {

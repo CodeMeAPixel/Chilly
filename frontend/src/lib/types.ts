@@ -293,6 +293,7 @@ export type AdminSearchResult = {
     length_ms?: number;
     error?: string;
     cause?: string;
+    cache?: string;
   };
 };
 

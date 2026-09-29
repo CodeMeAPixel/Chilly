@@ -85,6 +85,7 @@ Configuration comes from environment variables, or from a `.env` file in the wor
 | `API_*`, `DISCORD_CLIENT_*` | HTTP API, CORS, cookies and OAuth2 |
 | `AZURACAST_*` | Stations, the song library and requests |
 | `MEDIA_BASE_URL`, `MEDIA_SIGNING_KEY` | Where Lavalink fetches library songs, and the key used to sign those links |
+| `MEDIA_CACHE_DIR`, `MEDIA_CACHE_MAX_MB` | Local disk cache for library songs (default: the system temp folder, 2048 MB; `0` turns it off) |
 | `REQUEST_COOLDOWN`, `REQUEST_MAX_PENDING`, `SUGGESTION_MAX_OPEN` | Per-user limits for requests and suggestions |
 | `LOG_*` | Log level, format and output |
 

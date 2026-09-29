@@ -328,12 +328,14 @@ func (s *Server) handleAdminSearch(w http.ResponseWriter, r *http.Request, _ *Se
 	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
 	defer cancel()
 	resp["source_test"] = s.sourceTest(ctx, matches[0])
+	cacheStatus := s.warmMediaCache(ctx, matches[0])
 	started := time.Now()
 	result, err := node.LoadTracks(ctx, s.bot.Media.URL(matches[0].Station, matches[0].ID))
 	test := map[string]any{
 		"node":    node.Config().Name,
 		"track":   matches[0].Title,
 		"took_ms": time.Since(started).Milliseconds(),
+		"cache":   cacheStatus,
 	}
 	switch {
 	case err != nil:
@@ -428,6 +430,22 @@ func (s *Server) handleAdminSkipSong(w http.ResponseWriter, r *http.Request, ses
 	}
 	slog.Info("admin skipped song", slog.String("station", np.Station.Shortcode), slog.String("admin_id", sess.UserID.String()))
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) warmMediaCache(ctx context.Context, t musicbot.LibraryTrack) string {
+	if s.bot.MediaCache == nil {
+		return "disabled"
+	}
+	started := time.Now()
+	hit, err := s.bot.MediaCache.Warm(ctx, t.Station, t.ID)
+	switch {
+	case err != nil:
+		return "failed: " + err.Error()
+	case hit:
+		return "already cached"
+	default:
+		return fmt.Sprintf("downloaded in %dms", time.Since(started).Milliseconds())
+	}
 }
 
 func (s *Server) sourceTest(ctx context.Context, t musicbot.LibraryTrack) map[string]any {

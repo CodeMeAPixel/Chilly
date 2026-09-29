@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"regexp"
 	"sync"
 	"time"
@@ -34,10 +35,15 @@ type Searcher struct {
 	link    disgolink.Client
 	library *Library
 	signer  *MediaSigner
+	cache   *MediaCache
 }
 
 func NewSearcher(link disgolink.Client, library *Library, signer *MediaSigner) *Searcher {
 	return &Searcher{link: link, library: library, signer: signer}
+}
+
+func (s *Searcher) UseMediaCache(cache *MediaCache) {
+	s.cache = cache
 }
 
 func (s *Searcher) Library() *Library {
@@ -155,6 +161,7 @@ func (s *Searcher) LoadLibrary(ctx context.Context, tracks []LibraryTrack) ([]la
 }
 
 func (s *Searcher) loadOne(ctx context.Context, node disgolink.Node, lt LibraryTrack) (lavalink.Track, error) {
+	s.warm(ctx, lt)
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 	result, err := node.LoadTracks(ctx, s.signer.URL(lt.Station, lt.ID))
@@ -172,6 +179,18 @@ func (s *Searcher) loadOne(ctx context.Context, node disgolink.Node, lt LibraryT
 		return lavalink.Track{}, fmt.Errorf("unexpected load result %q for %q (is the lavalink http source enabled and MEDIA_BASE_URL reachable?)", result.LoadType, lt.Title)
 	}
 	return withLibraryInfo(track, lt), nil
+}
+
+func (s *Searcher) warm(ctx context.Context, lt LibraryTrack) {
+	if s.cache == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	defer cancel()
+	if _, err := s.cache.Warm(ctx, lt.Station, lt.ID); err != nil {
+		slog.Warn("failed to cache library song, lavalink will stream it from AzuraCast",
+			slog.String("station", lt.Station), slog.Int("id", lt.ID), slog.Any("error", err))
+	}
 }
 
 func withLibraryInfo(track lavalink.Track, lt LibraryTrack) lavalink.Track {

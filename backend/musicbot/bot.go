@@ -19,6 +19,7 @@ type Bot struct {
 	PlayerManager *PlayerManager
 	Searcher      *Searcher
 	Media         *MediaSigner
+	MediaCache    *MediaCache
 	Backfill      *LyricsBackfill
 	Requests      *Requests
 	Lyrics        *LyricsClient

@@ -322,8 +322,12 @@ func main() {
 		library = musicbot.NewLibrary(b.Radio.Client(), b.Radio.Shortcodes)
 		library.HideFolders(cfg.AzuraCast.LibraryHiddenFolders)
 		b.Media = newMediaSigner(cfg)
+		if b.Media != nil {
+			b.MediaCache = newMediaCache(cfg, b.Radio.Client())
+		}
 	}
 	b.Searcher = musicbot.NewSearcher(b.Lavalink, library, b.Media)
+	b.Searcher.UseMediaCache(b.MediaCache)
 	b.Lyrics = musicbot.NewLyricsClient(cfg.Lyrics.URL)
 
 	b.Db, err = musicbot.NewDB(cfg.DB, DBschema)
@@ -477,6 +481,24 @@ func checkNodeSources(ctx context.Context, b *musicbot.Bot) {
 		slog.Error("lavalink node has the http source disabled; stations and library songs can't play",
 			slog.String("node", node.Config().Name))
 	}
+}
+
+func newMediaCache(cfg musicbot.Config, fetcher musicbot.MediaFetcher) *musicbot.MediaCache {
+	if cfg.Media.CacheMaxMB <= 0 {
+		slog.Info("media cache disabled; library songs stream straight from AzuraCast")
+		return nil
+	}
+	dir := cfg.Media.CacheDir
+	if dir == "" {
+		dir = filepath.Join(os.TempDir(), "chilly-media")
+	}
+	cache, err := musicbot.NewMediaCache(dir, int64(cfg.Media.CacheMaxMB)<<20, fetcher)
+	if err != nil {
+		slog.Warn("media cache unavailable; library songs stream straight from AzuraCast", slog.String("dir", dir), slog.Any("error", err))
+		return nil
+	}
+	slog.Info("media cache enabled", slog.String("dir", dir), slog.Int("max_mb", cfg.Media.CacheMaxMB))
+	return cache
 }
 
 func newMediaSigner(cfg musicbot.Config) *musicbot.MediaSigner {
