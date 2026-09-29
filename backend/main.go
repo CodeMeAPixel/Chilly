@@ -79,7 +79,7 @@ func libraryLogger() *slog.Logger {
 	return slog.New(minLevelHandler{Handler: slog.Default().Handler(), min: slog.LevelInfo})
 }
 
-func setupLogger(cfg musicbot.LogConfig) {
+func setupLogger(cfg musicbot.LogConfig, logs *musicbot.LogBuffer) {
 	var level slog.Level
 	switch strings.ToLower(strings.TrimSpace(cfg.Level)) {
 	case "debug":
@@ -136,7 +136,7 @@ func setupLogger(cfg musicbot.LogConfig) {
 		}
 	}
 
-	slog.SetDefault(slog.New(handler))
+	slog.SetDefault(slog.New(logs.Handler(handler)))
 
 	slog.Info("logger initialized")
 	slog.Info("startup",
@@ -151,7 +151,8 @@ func main() {
 		slog.Error("failed to read config file", slog.Any("err", err))
 		os.Exit(1)
 	}
-	setupLogger(cfg.Log)
+	logs := musicbot.NewLogBuffer(1000, slog.LevelInfo)
+	setupLogger(cfg.Log, logs)
 	slog.Info("starting Chilly",
 		"version", version,
 		"disgo", disgo.Version,
@@ -161,7 +162,7 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
 	defer stop()
 
-	b := &musicbot.Bot{Cfg: cfg}
+	b := &musicbot.Bot{Cfg: cfg, Logs: logs, Version: version}
 	if cfg.AzuraCast.Enabled {
 		if cfg.AzuraCast.URL == "" {
 			slog.Error("AZURACAST_ENABLED is true but AZURACAST_URL is empty")
@@ -237,6 +238,13 @@ func main() {
 			r.Autocomplete("/now", cmds.RadioStationAutocomplete)
 			r.SlashCommand("/stations", cmds.RadioStations)
 		})
+		commandCreates = append(commandCreates, commands.StayCommand)
+		r.Route("/247", func(r handler.Router) {
+			r.SlashCommand("/on", cmds.StayOn)
+			r.Autocomplete("/on", cmds.RadioStationAutocomplete)
+			r.SlashCommand("/off", cmds.StayOff)
+			r.SlashCommand("/status", cmds.StayStatus)
+		})
 	}
 
 	presenceOpts := []gateway.PresenceOpt{}
@@ -248,7 +256,7 @@ func main() {
 
 	activityName := strings.TrimSpace(cfg.Bot.ActivityName)
 	if activityName == "" {
-		activityName = "Music • /play"
+		activityName = "24/7 radio • /radio"
 	}
 
 	switch strings.ToLower(strings.TrimSpace(cfg.Bot.ActivityType)) {
@@ -314,6 +322,11 @@ func main() {
 	slog.Info("connected to database")
 	defer b.Db.Close()
 
+	b.Stays = musicbot.NewStayStore(b.Db)
+	if err = b.Stays.Load(ctx); err != nil {
+		slog.Error("failed to load 24/7 radio settings", slog.Any("error", err))
+	}
+
 	if err = b.Start(ctx); err != nil {
 		slog.Error("failed to start bot", slog.Any("err", err))
 		os.Exit(1)
@@ -326,6 +339,7 @@ func main() {
 	if b.Radio != nil {
 		b.Radio.OnSongChange(hdlr.OnRadioSongChange)
 		go b.Radio.Run(ctx)
+		go b.RunStaySupervisor(ctx)
 		slog.Info("azuracast radio enabled", slog.String("url", cfg.AzuraCast.URL))
 	}
 

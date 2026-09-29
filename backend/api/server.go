@@ -81,6 +81,9 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.Handle("POST "+p+"/guilds/{guildID}/queue/move", s.authed(s.handleMoveQueue))
 	mux.Handle("DELETE "+p+"/guilds/{guildID}/queue/{index}", s.authed(s.handleRemoveQueue))
 	mux.Handle("POST "+p+"/guilds/{guildID}/radio", s.authed(s.handlePlayRadio))
+	mux.Handle("GET "+p+"/guilds/{guildID}/radio/247", s.authed(s.handleGetStay))
+	mux.Handle("PUT "+p+"/guilds/{guildID}/radio/247", s.authed(s.handleEnableStay))
+	mux.Handle("DELETE "+p+"/guilds/{guildID}/radio/247", s.authed(s.handleDisableStay))
 
 	mux.Handle("GET "+p+"/playlists", s.authed(s.handleListPlaylists))
 	mux.Handle("POST "+p+"/playlists", s.authed(s.handleCreatePlaylist))
@@ -93,6 +96,7 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET "+p+"/radio/stations", s.handleRadioStations)
 	mux.HandleFunc("GET "+p+"/radio/stations/{station}", s.handleRadioStation)
 
+	s.adminRoutes(mux)
 	mux.HandleFunc(p+"/", func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not_found", "route not found")
 	})

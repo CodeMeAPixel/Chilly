@@ -78,6 +78,11 @@ export function usePlayer(guildId: string) {
     skip: () => run(api<PlayerState>(`${base}/player/skip?queue_limit=200`, { method: "POST" })),
     previous: () => run(api<PlayerState>(`${base}/player/previous?queue_limit=200`, { method: "POST" })),
     stop: () => run(api<PlayerState>(`${base}/player/stop?queue_limit=200`, { method: "POST" }), "Stopped and cleared the queue"),
+    disableStay: () =>
+      run(
+        api(`${base}/radio/247`, { method: "DELETE" }).then(() => api<PlayerState>(`${base}/player?queue_limit=200`)),
+        "24/7 radio is off",
+      ),
     clearQueue: () => run(api<PlayerState>(`${base}/queue?queue_limit=200`, { method: "DELETE" }), "Queue cleared"),
     remove: (index: number) => run(api<PlayerState>(`${base}/queue/${index}?queue_limit=200`, { method: "DELETE" })),
     move: (from: number, to: number) =>

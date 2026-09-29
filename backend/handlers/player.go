@@ -74,6 +74,20 @@ func (h *Handlers) OnPlayerInteraction(event *events.ComponentInteractionCreate)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
+	if buttonID == StopPlayer && h.Stays.Enabled(guildID) {
+		if !h.CanManageStay(guildID, event.User().ID, event.Member()) {
+			_ = event.CreateMessage(discord.MessageCreate{
+				Content: "24/7 radio is on in this server. Someone with **Manage Server** can turn it off with `/247 off`.",
+				Flags:   discord.MessageFlagEphemeral,
+			})
+			return
+		}
+		if _, err := h.DisableStay(ctx, guildID); err != nil {
+			musicbot.LogCommandError(err, "button/"+string(buttonID), guildID.String(), event.User().ID.String())
+			return
+		}
+	}
+
 	var err error
 	switch buttonID {
 	case PlayNext, StopPlayer, PlayPrevious:

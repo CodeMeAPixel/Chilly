@@ -185,6 +185,7 @@ func parseNodesFromEnvironment(existing []NodeConfig) []NodeConfig {
 			Password:  getenv("NODE_PASSWORD", ""),
 			Secure:    parseBoolEnv("NODE_SECURE", false),
 			SessionID: getenv("NODE_SESSION_ID", ""),
+			Location:  strings.TrimSpace(getenv("NODE_LOCATION", "")),
 		})
 	}
 
@@ -194,6 +195,7 @@ func parseNodesFromEnvironment(existing []NodeConfig) []NodeConfig {
 		passwordKey := fmt.Sprintf("NODE_%d_PASSWORD", i)
 		secureKey := fmt.Sprintf("NODE_%d_SECURE", i)
 		sessionKey := fmt.Sprintf("NODE_%d_SESSION_ID", i)
+		locationKey := fmt.Sprintf("NODE_%d_LOCATION", i)
 
 		if getenv(nameKey, "") == "" && getenv(addressKey, "") == "" && getenv(passwordKey, "") == "" && getenv(sessionKey, "") == "" {
 			continue
@@ -205,6 +207,7 @@ func parseNodesFromEnvironment(existing []NodeConfig) []NodeConfig {
 			Password:  getenv(passwordKey, ""),
 			Secure:    parseBoolEnv(secureKey, false),
 			SessionID: getenv(sessionKey, ""),
+			Location:  strings.TrimSpace(getenv(locationKey, "")),
 		})
 	}
 
@@ -372,6 +375,7 @@ type NodeConfig struct {
 	Password  string `yaml:"password"`
 	Secure    bool   `yaml:"secure"`
 	SessionID string `yaml:"session_id"`
+	Location  string `yaml:"location"`
 }
 
 type TrackerConfig struct {

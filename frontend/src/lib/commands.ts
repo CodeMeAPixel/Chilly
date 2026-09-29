@@ -5,6 +5,22 @@ export type CommandGroup = {
 
 export const commandGroups: CommandGroup[] = [
   {
+    name: "Radio",
+    commands: [
+      { name: "/radio play", description: "Tune your voice channel into one of our 24/7 stations" },
+      { name: "/radio now", description: "See what's on air right now" },
+      { name: "/radio stations", description: "Browse every station and who's listening" },
+    ],
+  },
+  {
+    name: "24/7",
+    commands: [
+      { name: "/247 on", description: "Keep a station playing in your channel around the clock, even when it's empty" },
+      { name: "/247 off", description: "Turn 24/7 radio off again" },
+      { name: "/247 status", description: "See which station is set to play 24/7 and where" },
+    ],
+  },
+  {
     name: "Music",
     commands: [
       { name: "/play", description: "Play a song, album or playlist from a search or link" },
@@ -31,14 +47,6 @@ export const commandGroups: CommandGroup[] = [
       { name: "/list remove", description: "Remove a track from a playlist" },
       { name: "/list delete", description: "Delete a playlist" },
       { name: "/list list", description: "List your playlists" },
-    ],
-  },
-  {
-    name: "Radio",
-    commands: [
-      { name: "/radio play", description: "Tune into one of our 24/7 radio stations" },
-      { name: "/radio now", description: "See what's on air right now" },
-      { name: "/radio stations", description: "Browse every station" },
     ],
   },
   {

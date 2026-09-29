@@ -6,6 +6,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- 24/7 radio: `/247 on`, `/247 off` and `/247 status` keep a station playing in a voice channel even when it's empty. The setting survives restarts, and the bot rejoins and restarts the station on its own.
+- 24/7 controls on the website: a "Keep it playing 24/7" option when sending a station to a server, and a 24/7 banner with an off switch in the dashboard player.
+- A redesigned radio page with search, filters, sorting, compact station cards and a sticky player bar with volume control.
+- An admin panel for users in `API_ADMIN_USER_IDS`, with bot and node health, every server the bot is in, player actions (disconnect, move node, leave server), a track lookup tester and recent logs.
+- A brand page with logo downloads, colours, typography and copy, and a bot list template in `docs/bot-listing.md`.
+- Optional `NODE_LOCATION` / `NODE_n_LOCATION` settings, shown on the status page and in the admin panel.
+- A mobile navigation menu for the website and dashboard.
+
+### Changed
+
+- Chilly is now presented as a 24/7 radio bot first, across the website, help and invite embeds, the default presence and the README. Song playback is still fully supported.
+- The invite link now asks only for the permissions Chilly uses, and no longer requests Manage Server, Manage Channels, Manage Messages, View Audit Log or Add Reactions.
+- Track exception logs include the node name and no longer repeat the error twice.
+
 ### Fixed
 
 - AzuraCast polling no longer fails when a track reports a fractional duration.

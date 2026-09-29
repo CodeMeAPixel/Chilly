@@ -1,12 +1,13 @@
 "use client";
 
-import { ArrowLeft, Lock, ServerCrash, WifiOff } from "lucide-react";
+import { ArrowLeft, Lock, Moon, ServerCrash, WifiOff } from "lucide-react";
 import Link from "next/link";
 import { GuildAvatar } from "@/components/guild-avatar";
-import { Badge, buttonClass, Card, EmptyState, Skeleton } from "@/components/ui";
+import { Badge, Button, buttonClass, Card, EmptyState, Skeleton } from "@/components/ui";
 import { useGuilds } from "@/hooks/use-me";
 import { usePlayer } from "@/hooks/use-player";
 import { loginUrl } from "@/lib/api";
+import type { Stay } from "@/lib/types";
 import { AddTracks } from "./add-tracks";
 import { NowPlaying } from "./now-playing";
 import { QueueList, type QueueTab } from "./queue-list";
@@ -72,6 +73,7 @@ export function PlayerView({ guildId, initialTab }: { guildId: string; initialTa
           ) : (
             <Badge>Connecting</Badge>
           )}
+          {state.stay && <Badge tone="primary"><Moon className="h-3 w-3" /> 24/7</Badge>}
           {!state.can_control && <Badge><Lock className="h-3 w-3" /> View only</Badge>}
         </div>
       </div>
@@ -82,12 +84,38 @@ export function PlayerView({ guildId, initialTab }: { guildId: string; initialTa
         </p>
       )}
 
+      {state.stay && <StayBanner stay={state.stay} canManage={state.can_manage} onDisable={actions.disableStay} />}
+
       <NowPlaying state={state} receivedAt={receivedAt} actions={actions} />
 
       <div className="grid gap-6 xl:grid-cols-[1fr_400px]">
         <QueueList guildId={guildId} state={state} receivedAt={receivedAt} actions={actions} initialTab={initialTab} />
         <AddTracks canAdd={canAdd} actions={actions} />
       </div>
+    </div>
+  );
+}
+
+function StayBanner({ stay, canManage, onDisable }: { stay: Stay; canManage: boolean; onDisable: () => void }) {
+  const failing = stay.health.failures > 0;
+  return (
+    <div className="flex flex-wrap items-center gap-4 rounded-3xl border border-primary/30 bg-primary-soft px-5 py-4">
+      <div className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-primary text-primary-fg">
+        <Moon className="h-5 w-5" />
+      </div>
+      <div className="min-w-0 flex-1 text-sm">
+        <p className="font-medium">24/7 radio is on: {stay.station_name}</p>
+        <p className="text-muted">
+          {failing
+            ? `Having trouble restarting (${stay.health.last_error ?? "unknown error"}). Chilly will keep retrying.`
+            : "Chilly stays in the voice channel and keeps this station playing, even when nobody is listening."}
+        </p>
+      </div>
+      {canManage && (
+        <Button variant="secondary" size="sm" onClick={onDisable}>
+          Turn off 24/7
+        </Button>
+      )}
     </div>
   );
 }

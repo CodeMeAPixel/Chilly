@@ -1,7 +1,7 @@
 "use client";
 
 import { useQueryClient } from "@tanstack/react-query";
-import { LayoutDashboard, ListMusic, LogOut } from "lucide-react";
+import { LayoutDashboard, ListMusic, LogOut, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
@@ -63,6 +63,11 @@ export function UserNav() {
           <Link href="/dashboard/playlists" onClick={() => setOpen(false)} className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm hover:bg-surface-2">
             <ListMusic className="h-4 w-4 text-muted" /> Playlists
           </Link>
+          {me.admin && (
+            <Link href="/dashboard/admin" onClick={() => setOpen(false)} className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm hover:bg-surface-2">
+              <ShieldCheck className="h-4 w-4 text-muted" /> Admin
+            </Link>
+          )}
           <button onClick={logout} className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-sm text-danger hover:bg-danger/10 cursor-pointer">
             <LogOut className="h-4 w-4" /> Log out
           </button>

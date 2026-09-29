@@ -52,7 +52,7 @@ export function inviteUrl(clientId: string | undefined) {
   const params = new URLSearchParams({
     client_id: clientId,
     scope: "bot applications.commands",
-    permissions: "36775152",
+    permissions: "37047296",
   });
   return `https://discord.com/oauth2/authorize?${params}`;
 }

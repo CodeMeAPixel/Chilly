@@ -21,6 +21,9 @@ type Bot struct {
 	Lyrics        *LyricsClient
 	Nodes         *NodeSupervisor
 	Radio         *azuracast.Service
+	Stays         *StayStore
+	Logs          *LogBuffer
+	Version       string
 	StartedAt     time.Time
 }
 
@@ -32,7 +35,11 @@ func (b *Bot) Start(ctx context.Context) error {
 	}
 
 	configs := make([]disgolink.NodeConfig, 0, len(b.Cfg.Nodes))
+	locations := make(map[string]string, len(b.Cfg.Nodes))
 	for _, n := range b.Cfg.Nodes {
+		if n.Location != "" {
+			locations[n.Name] = n.Location
+		}
 		configs = append(configs, disgolink.NodeConfig{
 			Name:      n.Name,
 			Address:   n.Address,
@@ -47,6 +54,7 @@ func (b *Bot) Start(ctx context.Context) error {
 
 	b.Nodes = NewNodeSupervisor(b.Lavalink, b.PlayerManager, configs)
 	b.Nodes.Rejoin = b.RejoinVoice
+	b.Nodes.Locations = locations
 	nodeCtx, cancelNodes := context.WithTimeout(ctx, 15*time.Second)
 	defer cancelNodes()
 	connected := b.Nodes.ConnectAll(nodeCtx)

@@ -50,15 +50,27 @@ func (c *Commands) Skip(_ discord.SlashCommandInteractionData, e *handler.Comman
 }
 
 func (c *Commands) Stop(_ discord.SlashCommandInteractionData, e *handler.CommandEvent) error {
+	disableStay, blocked := c.stayGuard(e)
+	if blocked {
+		return nil
+	}
 	player, ok := c.activePlayer(e)
 	if !ok {
 		return nil
+	}
+	message := "⏹️ Stopped playing and cleared the queue."
+	if disableStay {
+		if _, err := c.DisableStay(e.Ctx, *e.GuildID()); err != nil {
+			ephemeral(e, "Failed to turn off 24/7 radio.")
+			return err
+		}
+		message += " 24/7 radio is now off."
 	}
 	if err := player.Stop(e.Ctx); err != nil {
 		ephemeral(e, "Failed to stop player.")
 		return err
 	}
-	reply(e, "⏹️ Stopped playing and cleared the queue.")
+	reply(e, message)
 	return nil
 }
 

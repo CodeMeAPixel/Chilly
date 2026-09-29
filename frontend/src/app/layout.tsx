@@ -9,27 +9,27 @@ const display = Fredoka({ variable: "--font-display", subsets: ["latin"], weight
 
 const siteUrl = process.env.SITE_URL ?? "http://localhost:3000";
 const description =
-  "Chilly is a laid-back Discord music bot. Play from YouTube, SoundCloud and Spotify, run 24/7 radio, save playlists and control everything from a live web dashboard.";
+  "Chilly is a 24/7 radio bot for Discord. Tune your voice channel into always-on stations, keep them playing around the clock, play any song on request and control it all from a live web dashboard.";
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: {
-    default: "Chilly — chill music for your Discord server",
+    default: "Chilly — 24/7 radio for your Discord server",
     template: "%s · Chilly",
   },
   description,
   applicationName: "Chilly",
-  keywords: ["discord music bot", "discord bot", "lavalink", "music", "radio", "playlists"],
+  keywords: ["discord radio bot", "24/7 discord radio", "discord music bot", "lofi discord bot", "radio", "music"],
   openGraph: {
     type: "website",
     siteName: "Chilly",
-    title: "Chilly — chill music for your Discord server",
+    title: "Chilly — 24/7 radio for your Discord server",
     description,
     url: "/",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Chilly — chill music for your Discord server",
+    title: "Chilly — 24/7 radio for your Discord server",
     description,
   },
 };

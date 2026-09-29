@@ -53,3 +53,21 @@ func TestReadConfigFromEnv(t *testing.T) {
 		t.Fatalf("expected log format to be json, got %q", cfg.Log.Format)
 	}
 }
+
+func TestParseNodeLocations(t *testing.T) {
+	t.Setenv("NODE_1_NAME", "node-1")
+	t.Setenv("NODE_1_ADDRESS", "a:2333")
+	t.Setenv("NODE_1_LOCATION", "  Frankfurt, DE ")
+	t.Setenv("NODE_2_ADDRESS", "b:2333")
+
+	nodes := parseNodesFromEnvironment(nil)
+	if len(nodes) != 2 {
+		t.Fatalf("expected 2 nodes, got %d", len(nodes))
+	}
+	if nodes[0].Location != "Frankfurt, DE" {
+		t.Errorf("node-1 location = %q, want trimmed value", nodes[0].Location)
+	}
+	if nodes[1].Location != "" {
+		t.Errorf("node-2 location = %q, want empty", nodes[1].Location)
+	}
+}

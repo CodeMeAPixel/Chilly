@@ -1,13 +1,13 @@
 import { ogSize, renderOgImage } from "@/lib/og";
 
-export const alt = "Chilly — chill music for your Discord server";
+export const alt = "Chilly — 24/7 radio for your Discord server";
 export const size = ogSize;
 export const contentType = "image/png";
 
 export default function Image() {
   return renderOgImage({
-    eyebrow: "Discord music bot",
-    title: "Chill music for your Discord server",
-    subtitle: "Playlists, 24/7 radio and a live web dashboard.",
+    eyebrow: "Discord radio bot",
+    title: "24/7 radio for your Discord server",
+    subtitle: "Always-on stations, songs on request and a live web dashboard.",
   });
 }

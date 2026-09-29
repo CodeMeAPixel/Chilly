@@ -35,3 +35,13 @@ CREATE TABLE IF NOT EXISTS api_sessions
 
 CREATE INDEX IF NOT EXISTS api_sessions_user_id_idx ON api_sessions (user_id);
 CREATE INDEX IF NOT EXISTS api_sessions_expires_at_idx ON api_sessions (expires_at);
+
+CREATE TABLE IF NOT EXISTS radio_stays
+(
+    guild_id         BIGINT          PRIMARY KEY,
+    voice_channel_id BIGINT          NOT NULL,
+    text_channel_id  BIGINT,
+    station          VARCHAR(100)    NOT NULL,
+    enabled_by       BIGINT          NOT NULL,
+    enabled_at       TIMESTAMPTZ     NOT NULL DEFAULT now()
+);

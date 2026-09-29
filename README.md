@@ -1,6 +1,6 @@
 # Chilly
 
-A self-hosted Discord music bot with a web dashboard. It plays through [Lavalink](https://lavalink.dev) and can stream [AzuraCast](https://www.azuracast.com) radio stations.
+A self-hosted 24/7 radio bot for Discord, with a web dashboard. It streams your own [AzuraCast](https://www.azuracast.com) stations into voice channels, can keep them playing around the clock, and plays songs on request through [Lavalink](https://lavalink.dev).
 
 This repository contains both halves of the project:
 
@@ -11,12 +11,12 @@ This repository contains both halves of the project:
 
 ## Features
 
-- **Music playback.** Play from YouTube, SoundCloud, Spotify, Deezer or Apple Music, depending on the Lavalink plugins you run. Search autocomplete queues the exact track you pick.
-- **Queue control.** Skip, previous, seek, pause, shuffle, and track or queue loop, from slash commands or player buttons.
-- **Playlists.** Save tracks and playlists per user in PostgreSQL and play them back with `/playlist`.
 - **Radio.** Stream AzuraCast stations with `/radio`. Now-playing info updates live and dropped streams reconnect automatically.
-- **Multiple Lavalink nodes.** New players go to the least loaded node. Players move to a healthy node if theirs goes down, and are restored after a node restarts.
-- **Dashboard API.** A REST API with Discord OAuth2 login, live player updates over server-sent events, and playlist management.
+- **24/7 mode.** `/247 on` keeps a station playing in a voice channel even when it's empty. The setting is saved in PostgreSQL, and the bot rejoins and restarts the station after restarts, disconnects or when a song queue runs out.
+- **Web radio.** Browse, search and listen to every station at `/radio` on the website, or send one to a voice channel.
+- **Songs on request.** Play from YouTube, SoundCloud, Spotify, Deezer or Apple Music, depending on the Lavalink plugins you run, with queue control, lyrics and saved playlists.
+- **Dashboard and admin panel.** A live web player for every server, plus an admin area for bot developers with server management, a track lookup tester and recent logs.
+- **Resilient playback.** Multiple Lavalink nodes with automatic failover, voice recovery and a public status page.
 
 ## Architecture
 
@@ -78,7 +78,7 @@ Configuration comes from environment variables, or from a `.env` file in the wor
 | Prefix | Purpose |
 | --- | --- |
 | `BOT_*` | Token, status and activity |
-| `NODE_*`, `NODE_1_*` … `NODE_10_*` | Lavalink nodes |
+| `NODE_*`, `NODE_1_*` … `NODE_10_*` | Lavalink nodes, including an optional `LOCATION` shown on the status page |
 | `SEARCH_PROVIDERS` | Search sources tried, in order, for plain-text queries |
 | `DB_*` | PostgreSQL connection |
 | `API_*`, `DISCORD_CLIENT_*` | HTTP API, CORS, cookies and OAuth2 |
@@ -102,6 +102,8 @@ Configuration comes from environment variables, or from a `.env` file in the wor
 
 | Command | Description |
 | --- | --- |
+| `/radio play`, `/radio now`, `/radio stations` | AzuraCast radio (when enabled) |
+| `/247 on`, `/247 off`, `/247 status` | Keep a station playing 24/7 (Manage Server, when radio is enabled) |
 | `/play`, `/search` | Play a track, album or playlist from a query or URL |
 | `/playlist` | Play one of your saved playlists |
 | `/queue`, `/now` | Show the queue or the current track |
@@ -109,10 +111,9 @@ Configuration comes from environment variables, or from a `.env` file in the wor
 | `/pause`, `/resume`, `/skip`, `/stop`, `/seek` | Playback control |
 | `/shuffle`, `/loop`, `/remove` | Queue control |
 | `/list create`, `/list add`, `/list remove`, `/list delete`, `/list list` | Manage your playlists |
-| `/radio play`, `/radio now`, `/radio stations` | AzuraCast radio (when enabled) |
 | `/join`, `/leave`, `/help`, `/invite`, `/ping` | General |
 
-To control playback, you need to be in the bot's voice channel.
+To control playback, you need to be in the bot's voice channel. While 24/7 radio is on, only members with Manage Server can stop the bot or make it leave, and doing so turns 24/7 off.
 
 ## API overview
 
@@ -135,14 +136,17 @@ All routes live under `/api/v1`. Authenticated routes accept the session cookie 
 | `POST` | `/guilds/{id}/queue/move` | ✓ |
 | `DELETE` | `/guilds/{id}/queue/{index}` | ✓ |
 | `POST` | `/guilds/{id}/radio` | ✓ |
+| `GET`, `PUT`, `DELETE` | `/guilds/{id}/radio/247` | ✓ (changes need Manage Server) |
 | `GET`, `POST` | `/playlists` | ✓ |
 | `GET`, `PATCH`, `DELETE` | `/playlists/{id}` | ✓ |
 | `POST` | `/playlists/{id}/tracks` | ✓ |
 | `DELETE` | `/playlists/{id}/tracks/{trackId}` | ✓ |
+| `GET` | `/admin/overview`, `/admin/guilds`, `/admin/guilds/{id}`, `/admin/logs` | Admin |
+| `POST` | `/admin/guilds/{id}/disconnect`, `/move`, `/leave`, `/admin/search` | Admin |
 
 Errors use one shape: `{"error": {"code": "...", "message": "..."}}`.
 
-Anyone who can see a guild can view its player. To change it, you must be in the bot's voice channel, have *Manage Server*, or be listed in `API_ADMIN_USER_IDS`.
+Admin routes require a user listed in `API_ADMIN_USER_IDS`. Anyone who can see a guild can view its player. To change it, you must be in the bot's voice channel, have *Manage Server*, or be listed in `API_ADMIN_USER_IDS`.
 
 ## Development
 

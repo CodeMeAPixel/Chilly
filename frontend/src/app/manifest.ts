@@ -4,7 +4,7 @@ export default function manifest(): MetadataRoute.Manifest {
   return {
     name: "Chilly",
     short_name: "Chilly",
-    description: "Chill music for your Discord server.",
+    description: "24/7 radio for your Discord server.",
     start_url: "/dashboard",
     display: "standalone",
     background_color: "#0a1014",

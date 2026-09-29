@@ -2,6 +2,7 @@ package musicbot
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"sync"
 	"time"
@@ -84,13 +85,14 @@ func (pm *PlayerManager) voiceCreds(guildID snowflake.ID) (voiceCreds, bool) {
 }
 
 type NodeSupervisor struct {
-	link     disgolink.Client
-	pm       *PlayerManager
-	configs  []disgolink.NodeConfig
-	mu       sync.Mutex
-	sessions map[string]string
-	health   map[snowflake.ID]*voiceHealth
-	Rejoin   func(ctx context.Context, guildID snowflake.ID) error
+	link      disgolink.Client
+	pm        *PlayerManager
+	configs   []disgolink.NodeConfig
+	mu        sync.Mutex
+	sessions  map[string]string
+	health    map[snowflake.ID]*voiceHealth
+	Rejoin    func(ctx context.Context, guildID snowflake.ID) error
+	Locations map[string]string
 }
 
 func NewNodeSupervisor(link disgolink.Client, pm *PlayerManager, configs []disgolink.NodeConfig) *NodeSupervisor {
@@ -233,6 +235,7 @@ func (s *NodeSupervisor) migrate(ctx context.Context, player *Player, target dis
 
 type NodeInfo struct {
 	Name             string  `json:"name"`
+	Location         string  `json:"location,omitempty"`
 	Status           string  `json:"status"`
 	Players          int     `json:"players"`
 	PlayingPlayers   int     `json:"playing_players"`
@@ -282,11 +285,23 @@ func Nodes(link disgolink.Client) []NodeInfo {
 func (s *NodeSupervisor) Nodes() []NodeInfo {
 	nodes := make([]NodeInfo, 0, len(s.configs))
 	for _, cfg := range s.configs {
+		info := NodeInfo{Name: cfg.Name, Status: string(disgolink.StatusDisconnected)}
 		if node := s.link.Node(cfg.Name); node != nil {
-			nodes = append(nodes, nodeInfo(node))
-			continue
+			info = nodeInfo(node)
 		}
-		nodes = append(nodes, NodeInfo{Name: cfg.Name, Status: string(disgolink.StatusDisconnected)})
+		info.Location = s.Locations[cfg.Name]
+		nodes = append(nodes, info)
 	}
 	return nodes
+}
+
+var ErrNodeNotFound = errors.New("lavalink node not found or not connected")
+
+func (s *NodeSupervisor) MoveTo(ctx context.Context, player *Player, nodeName string) error {
+	target := s.link.Node(nodeName)
+	if target == nil || target.Status() != disgolink.StatusConnected {
+		return ErrNodeNotFound
+	}
+	s.migrate(ctx, player, target)
+	return nil
 }

@@ -19,7 +19,7 @@ var invite = discord.SlashCommandCreate{
 }
 
 func (c *Commands) inviteURL() string {
-	const permissions = 36775152
+	const permissions = 37047296
 	return fmt.Sprintf(
 		"https://discord.com/oauth2/authorize?client_id=%s&scope=bot%%20applications.commands&permissions=%d",
 		c.Client.ApplicationID(), permissions)
@@ -37,22 +37,23 @@ func (c *Commands) Help(_ discord.SlashCommandInteractionData, e *handler.Comman
 		SetColor(musicbot.ColorMint).
 		SetAuthor("Chilly", c.SiteURL(""), c.botAvatar()).
 		SetTitle("Commands").
-		SetDescription(fmt.Sprintf("Everything Chilly can do. Control the player and manage playlists from the web at **[%s](%s)**.", c.SiteHost(), c.SiteURL("/dashboard"))).
-		AddField("Music", "`/play` `/search` `/playlist` `/queue` `/now` `/lyrics` `/pause` `/resume` `/seek` `/skip` `/stop` `/shuffle` `/loop` `/remove`", false).
-		AddField("Playlists", "`/list create` `/list add` `/list remove` `/list delete` `/list list`", false)
+		SetDescription(fmt.Sprintf("24/7 radio for your Discord server. Browse stations and control the player from the web at **[%s](%s)**.", c.SiteHost(), c.SiteURL("/radio")))
 	if c.Radio != nil {
-		embed.AddField("Radio", "`/radio play` `/radio now` `/radio stations`", false)
+		embed.AddField("📻 Radio", "`/radio play` `/radio now` `/radio stations`", false).
+			AddField("🌙 24/7", "`/247 on` `/247 off` `/247 status` · keep a station playing in a channel around the clock", false)
 	}
-	embed.AddField("Bot", "`/join` `/leave` `/help` `/invite`", false).
+	embed.AddField("🎵 Music", "`/play` `/search` `/playlist` `/queue` `/now` `/lyrics` `/pause` `/resume` `/seek` `/skip` `/stop` `/shuffle` `/loop` `/remove`", false).
+		AddField("Playlists", "`/list create` `/list add` `/list remove` `/list delete` `/list list`", false).
+		AddField("Bot", "`/join` `/leave` `/help` `/invite`", false).
 		SetFooter(c.SiteHost(), "")
 
 	return e.CreateMessage(discord.MessageCreate{
 		Embeds: []discord.Embed{embed.Build()},
 		Components: []discord.ContainerComponent{
 			discord.NewActionRow(
+				discord.NewLinkButton("Stations", c.SiteURL("/radio")),
 				discord.NewLinkButton("Dashboard", c.SiteURL("/dashboard")),
 				discord.NewLinkButton("Status", c.SiteURL("/status")),
-				discord.NewLinkButton("Website", c.SiteURL("")),
 			),
 		},
 	})
@@ -64,7 +65,7 @@ func (c *Commands) Invite(_ discord.SlashCommandInteractionData, e *handler.Comm
 			SetColor(musicbot.ColorMint).
 			SetAuthor("Chilly", c.SiteURL(""), c.botAvatar()).
 			SetTitle("Bring Chilly to your server").
-			SetDescription(fmt.Sprintf("Add Chilly to any server you manage, then run `/play` in a voice channel. Learn more at **[%s](%s)**.", c.SiteHost(), c.SiteURL(""))).
+			SetDescription(fmt.Sprintf("Add Chilly to any server you manage, join a voice channel and run `/radio play`. Use `/247 on` to keep a station playing around the clock. Learn more at **[%s](%s)**.", c.SiteHost(), c.SiteURL(""))).
 			Build()},
 		Components: []discord.ContainerComponent{
 			discord.NewActionRow(

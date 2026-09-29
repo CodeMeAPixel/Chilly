@@ -16,7 +16,7 @@ import (
 
 var RadioCommand = discord.SlashCommandCreate{
 	Name:        "radio",
-	Description: "Listen to our radio stations",
+	Description: "Tune into Chilly's 24/7 radio stations",
 	Options: []discord.ApplicationCommandOption{
 		discord.ApplicationCommandOptionSubCommand{
 			Name:        "play",

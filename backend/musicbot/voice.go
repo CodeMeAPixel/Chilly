@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgolink/v3/lavalink"
 	"github.com/disgoorg/snowflake/v2"
 )
@@ -135,4 +136,18 @@ func (b *Bot) Enqueue(ctx context.Context, req EnqueueRequest) (*Player, error) 
 		return player, err
 	}
 	return player, nil
+}
+
+func (b *Bot) ListenerCount(guildID, channelID snowflake.ID) int {
+	count := 0
+	b.Client.Caches().VoiceStatesForEach(guildID, func(vs discord.VoiceState) {
+		if vs.ChannelID == nil || *vs.ChannelID != channelID || vs.UserID == b.Client.ApplicationID() {
+			return
+		}
+		if member, ok := b.Client.Caches().Member(guildID, vs.UserID); ok && member.User.Bot {
+			return
+		}
+		count++
+	})
+	return count
 }

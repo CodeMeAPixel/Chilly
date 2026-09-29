@@ -31,6 +31,19 @@ export type PlayerState = {
   session_start: string;
   updated_at: string;
   can_control: boolean;
+  can_manage: boolean;
+  stay: Stay | null;
+};
+
+export type Stay = {
+  guild_id: string;
+  voice_channel_id: string;
+  text_channel_id?: string;
+  station: string;
+  station_name: string;
+  enabled_by: string;
+  enabled_at: string;
+  health: { failures: number; last_error?: string; retry_at?: string };
 };
 
 export type Guild = {
@@ -114,6 +127,7 @@ export type Station = {
 
 export type NodeInfo = {
   name: string;
+  location?: string;
   status: string;
   players: number;
   playing_players: number;
@@ -167,4 +181,61 @@ export type LyricsResult = {
     synced?: { time_ms: number; text: string }[];
     source: string;
   };
+};
+
+export type AdminOverview = {
+  version: string;
+  go_version: string;
+  started_at: string;
+  uptime_seconds: number;
+  goroutines: number;
+  heap_bytes: number;
+  sys_bytes: number;
+  gateway_status: string;
+  gateway_latency_ms: number;
+  guilds: number;
+  members: number;
+  players: number;
+  playing: number;
+  radio: { enabled: boolean; healthy: boolean; last_poll?: string; stations: number; online: number };
+  stays: Stay[];
+  nodes: NodeInfo[];
+};
+
+export type AdminGuild = {
+  id: string;
+  name: string;
+  icon_url: string | null;
+  member_count: number;
+  owner_id: string;
+  joined_at: string;
+  voice_channel_id?: string;
+  listeners: number;
+  playing: boolean;
+  paused: boolean;
+  current?: string;
+  source?: string;
+  radio?: string;
+  queue_length: number;
+  node?: string;
+  stay: Stay | null;
+};
+
+export type AdminSearchResult = {
+  node: string;
+  identifier: string;
+  took_ms: number;
+  load_type: string;
+  playlist?: string;
+  total?: number;
+  error?: string;
+  cause?: string;
+  tracks: { title: string; author: string; length_ms: number; uri?: string; source: string; is_stream: boolean }[];
+};
+
+export type LogEntry = {
+  time: string;
+  level: "DEBUG" | "INFO" | "WARN" | "ERROR" | string;
+  message: string;
+  attrs?: Record<string, string>;
 };

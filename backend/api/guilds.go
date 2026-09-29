@@ -101,11 +101,17 @@ func (s *Server) handleGuilds(w http.ResponseWriter, r *http.Request, sess *Sess
 
 type playerResponse struct {
 	musicbot.PlayerSnapshot
-	CanControl bool `json:"can_control"`
+	CanControl bool      `json:"can_control"`
+	CanManage  bool      `json:"can_manage"`
+	Stay       *stayView `json:"stay"`
 }
 
 func (s *Server) snapshot(a guildAccess, limit int) playerResponse {
-	resp := playerResponse{CanControl: s.canControl(a)}
+	resp := playerResponse{CanControl: s.canControl(a), CanManage: a.canManage}
+	if setting, ok := s.bot.Stays.Get(a.guildID); ok {
+		view := s.stayView(setting)
+		resp.Stay = &view
+	}
 	if p, ok := s.bot.PlayerManager.GetPlayer(a.guildID); ok {
 		resp.PlayerSnapshot = p.Snapshot(limit)
 	} else {
@@ -251,6 +257,9 @@ func (s *Server) handlePrevious(w http.ResponseWriter, r *http.Request, sess *Se
 func (s *Server) handleStop(w http.ResponseWriter, r *http.Request, sess *Session) {
 	a, player, ok := s.controlAccess(w, r, sess)
 	if !ok {
+		return
+	}
+	if !s.stayStopGuard(w, r, a) {
 		return
 	}
 	if err := player.Stop(r.Context()); err != nil {

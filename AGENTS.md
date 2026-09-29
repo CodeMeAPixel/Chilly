@@ -34,6 +34,8 @@ backend/
 ├── handlers/        Discord gateway handlers, Lavalink event handlers, player buttons
 ├── musicbot/        Core domain: Player, PlayerManager, Searcher, voice, nodes, watchdog, DB
 └── db/schema.sql    Embedded schema, applied idempotently on startup
+docs/
+└── bot-listing.md   Copy, tags and permissions for bot list sites
 frontend/
 ├── src/app/(site)/  Public pages: landing, radio, status, login
 ├── src/app/dashboard/  Authenticated dashboard: servers, live player, playlists
@@ -70,6 +72,7 @@ bun run build
 - **Always resolve the Lavalink player through `lavalinkPlayer` / `PlayerManager.LavalinkPlayer`** and nodes through `musicbot.BestNode`. Never call `link.Player` or `link.BestNode` directly: disgolink's versions can select a disconnected or overloaded node.
 - **Voice events must stay synchronous and ordered.** `OnVoiceStateUpdate` and `OnVoiceServerUpdate` run on the gateway goroutine on purpose. Slash commands, autocomplete and component interactions are dispatched through the `concurrent` wrapper in `main.go`. Do not re-enable disgo's async events globally; it reorders voice events and leaves players silent.
 - **Wait for voice before playing.** Use `Bot.EnsureVoice` / `Bot.Enqueue`; they wait for Lavalink to receive voice credentials before a track is sent.
+- **24/7 radio is driven by `Bot.Stays` and `RunStaySupervisor`.** Anything that makes the bot leave a channel or stop playback on its own (the empty-channel timer, `/stop`, `/leave`, dashboard stop) must check `Stays.Enabled` first, otherwise the supervisor rejoins seconds later.
 - **Stale Lavalink events are ignored** by comparing the ended track's `Encoded` value with the current track. Keep that check when changing track-end handling.
 - **Discord limits:** autocomplete choice names and values must be 100 characters or fewer, and autocomplete must answer within 3 seconds (the code budgets 2.5 s). Use `Searcher.Remember` for values.
 - **Library loggers are capped at Info.** disgo logs the gateway token at Debug level, so never pass the application log level through to disgo or disgolink.

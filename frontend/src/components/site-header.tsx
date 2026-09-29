@@ -6,9 +6,9 @@ import { ThemeToggle } from "./theme-toggle";
 import { UserNav } from "./user-nav";
 
 const links = [
+  { href: "/radio", label: "Stations" },
   { href: "/#features", label: "Features" },
   { href: "/#commands", label: "Commands" },
-  { href: "/radio", label: "Radio" },
   { href: "/status", label: "Status" },
   { href: "/dashboard", label: "Dashboard" },
 ];

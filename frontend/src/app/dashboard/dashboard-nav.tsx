@@ -1,16 +1,17 @@
 "use client";
 
-import { LayoutGrid, ListMusic } from "lucide-react";
+import { LayoutGrid, ListMusic, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { GuildAvatar } from "@/components/guild-avatar";
 import { Equalizer, Skeleton } from "@/components/ui";
-import { useGuilds } from "@/hooks/use-me";
+import { useGuilds, useMe } from "@/hooks/use-me";
 import { cn } from "@/lib/format";
 
 export function DashboardNav({ className }: { className?: string }) {
   const pathname = usePathname();
   const { data: guilds, isLoading } = useGuilds();
+  const { data: me } = useMe();
 
   const item = (href: string, active: boolean) =>
     cn(
@@ -27,6 +28,11 @@ export function DashboardNav({ className }: { className?: string }) {
         <Link href="/dashboard/playlists" className={item("/dashboard/playlists", pathname.startsWith("/dashboard/playlists"))}>
           <ListMusic className="h-4 w-4" /> Playlists
         </Link>
+        {me?.admin && (
+          <Link href="/dashboard/admin" className={item("/dashboard/admin", pathname.startsWith("/dashboard/admin"))}>
+            <ShieldCheck className="h-4 w-4" /> Admin
+          </Link>
+        )}
       </div>
       <div className="space-y-1">
         <p className="px-3 text-xs font-medium tracking-wide text-muted uppercase">Your servers</p>

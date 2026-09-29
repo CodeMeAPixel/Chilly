@@ -7,7 +7,7 @@ import { Radio } from "lucide-react";
 
 export const metadata: Metadata = {
   title: "Radio",
-  description: "Tune into Chilly's 24/7 radio stations in your browser or straight into your Discord voice channel.",
+  description: "Browse Chilly's 24/7 radio stations. Listen in your browser, or send a station to your Discord voice channel and keep it playing around the clock.",
   openGraph: { url: "/radio" },
 };
 
@@ -21,7 +21,7 @@ export default async function RadioPage() {
         <p className="text-sm font-medium tracking-wide text-primary uppercase">Radio</p>
         <h1 className="font-display text-4xl font-semibold tracking-tight">Always on air</h1>
         <p className="max-w-2xl text-muted">
-          Listen right here or send a station to your voice channel. Now-playing info updates live.
+          Listen right here, send a station to your voice channel, or use <code className="rounded-md bg-surface-2 px-1.5 py-0.5 font-mono text-sm text-fg">/247 on</code> to keep it playing there around the clock.
         </p>
       </div>
 
@@ -32,6 +32,14 @@ export default async function RadioPage() {
       ) : (
         <RadioBrowser initial={stations} />
       )}
+
+      <p className="mt-12 text-center text-xs text-muted">
+        Stations are run by the Chilly team and streamed with{" "}
+        <a href="https://www.azuracast.com" target="_blank" rel="noreferrer" className="underline-offset-2 hover:text-fg hover:underline">
+          AzuraCast
+        </a>
+        .
+      </p>
     </div>
   );
 }

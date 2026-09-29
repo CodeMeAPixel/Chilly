@@ -68,11 +68,23 @@ func (c *Commands) Disconnect(_ discord.SlashCommandInteractionData, e *handler.
 		ephemeral(e, "You need to be in my voice channel to disconnect me.")
 		return nil
 	}
+	disableStay, blocked := c.stayGuard(e)
+	if blocked {
+		return nil
+	}
+	message := "Left voice channel."
+	if disableStay {
+		if _, err := c.DisableStay(e.Ctx, *e.GuildID()); err != nil {
+			ephemeral(e, "Failed to turn off 24/7 radio.")
+			return err
+		}
+		message = "Left voice channel. 24/7 radio is now off."
+	}
 	if err := c.Client.UpdateVoiceState(e.Ctx, *e.GuildID(), nil, false, true); err != nil {
 		ephemeral(e, "Failed to leave voice channel.")
 		return err
 	}
-	reply(e, "Left voice channel.")
+	reply(e, message)
 	return nil
 }
 

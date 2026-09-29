@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { Activity, Clock, Cpu, Gauge, HardDrive, Server, Signal, Users, WifiOff } from "lucide-react";
+import { Activity, Clock, Cpu, Gauge, HardDrive, MapPin, Server, Signal, Users, WifiOff } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Blobs } from "@/components/decor";
 import { api } from "@/lib/api";
@@ -199,11 +199,18 @@ function NodeCard({ node }: { node: NodeInfo }) {
 
   return (
     <div className="rounded-[24px] border border-border bg-surface p-5">
-      <div className="flex items-center justify-between">
-        <p className="font-mono text-sm font-semibold">{node.name}</p>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="font-mono text-sm font-semibold">{node.name}</p>
+          {node.location && (
+            <p className="mt-1 flex items-center gap-1 truncate text-xs text-muted">
+              <MapPin className="h-3.5 w-3.5 shrink-0" /> {node.location}
+            </p>
+          )}
+        </div>
         <span
           className={cn(
-            "rounded-full px-2.5 py-0.5 text-xs font-medium",
+            "shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium",
             up ? "bg-lime/15 text-lime" : "bg-accent-soft text-accent",
           )}
         >

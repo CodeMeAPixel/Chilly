@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 	"sync"
 	"time"
 
@@ -78,20 +79,13 @@ func (h *Handlers) OnVoiceStateUpdate(event *events.GuildVoiceStateUpdate) {
 }
 
 func (h *Handlers) listenersIn(guildID, channelID snowflake.ID) int {
-	count := 0
-	h.Client.Caches().VoiceStatesForEach(guildID, func(vs discord.VoiceState) {
-		if vs.ChannelID == nil || *vs.ChannelID != channelID || vs.UserID == h.Client.ApplicationID() {
-			return
-		}
-		if member, ok := h.Client.Caches().Member(guildID, vs.UserID); ok && member.User.Bot {
-			return
-		}
-		count++
-	})
-	return count
+	return h.ListenerCount(guildID, channelID)
 }
 
 func (h *Handlers) scheduleLeave(guildID snowflake.ID) {
+	if h.Stays.Enabled(guildID) {
+		return
+	}
 	h.aloneMu.Lock()
 	defer h.aloneMu.Unlock()
 	if _, pending := h.aloneTimers[guildID]; pending {
@@ -103,7 +97,7 @@ func (h *Handlers) scheduleLeave(guildID snowflake.ID) {
 		h.aloneMu.Unlock()
 
 		botChannel, ok := h.BotVoiceChannel(guildID)
-		if !ok || h.listenersIn(guildID, botChannel) > 0 {
+		if !ok || h.listenersIn(guildID, botChannel) > 0 || h.Stays.Enabled(guildID) {
 			return
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -314,13 +308,17 @@ func (h *Handlers) playAlternative(player *musicbot.Player, event lavalink.Track
 }
 
 func (h *Handlers) OnTrackException(p disgolink.Player, event lavalink.TrackExceptionEvent) {
-	slog.Warn("track exception",
+	attrs := []any{
 		slog.String("guild_id", p.GuildID().String()),
+		slog.String("node", p.Node().Config().Name),
 		slog.String("title", event.Track.Info.Title),
 		slog.String("source", event.Track.Info.SourceName),
 		slog.String("message", event.Exception.Message),
-		slog.String("cause", event.Exception.Cause),
-	)
+	}
+	if !strings.Contains(event.Exception.Cause, event.Exception.Message) {
+		attrs = append(attrs, slog.String("cause", event.Exception.Cause))
+	}
+	slog.Warn("track exception", attrs...)
 	player, ok := h.PlayerManager.GetPlayer(p.GuildID())
 	if !ok || player.ChannelID() == 0 {
 		return
