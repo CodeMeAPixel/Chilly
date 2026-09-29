@@ -282,6 +282,7 @@ export type AdminSearchResult = {
     content_range?: string;
     final_url_host?: string;
     magic?: string;
+    range_supported?: boolean;
     error?: string;
   };
   playback_test?: {

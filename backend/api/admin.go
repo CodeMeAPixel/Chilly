@@ -433,7 +433,15 @@ func (s *Server) handleAdminSkipSong(w http.ResponseWriter, r *http.Request, ses
 func (s *Server) sourceTest(ctx context.Context, t musicbot.LibraryTrack) map[string]any {
 	test := map[string]any{"ok": false}
 	started := time.Now()
-	resp, err := s.bot.Radio.Client().PlayFile(ctx, t.Station, t.ID, "bytes=0-15")
+	client := s.bot.Radio.Client()
+	resp, err := client.PlayFile(ctx, t.Station, t.ID, "bytes=0-15")
+	if err == nil {
+		test["range_supported"] = resp.StatusCode == http.StatusPartialContent
+		if resp.StatusCode >= 500 {
+			resp.Body.Close()
+			resp, err = client.PlayFile(ctx, t.Station, t.ID, "")
+		}
+	}
 	test["took_ms"] = time.Since(started).Milliseconds()
 	if err != nil {
 		test["error"] = err.Error()
@@ -450,7 +458,8 @@ func (s *Server) sourceTest(ctx context.Context, t musicbot.LibraryTrack) map[st
 	test["magic"] = fmt.Sprintf("% x", head[:n])
 	test["ok"] = resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusPartialContent
 	if !test["ok"].(bool) {
-		test["error"] = strings.TrimSpace(string(head[:n]))
+		rest, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
+		test["error"] = strings.TrimSpace(string(head[:n]) + string(rest))
 	}
 	return test
 }

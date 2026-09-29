@@ -101,6 +101,14 @@ export function ToolsTab() {
                     ["content-range", result.source_test.content_range],
                     ["served from", result.source_test.final_url_host],
                     ["first bytes", result.source_test.magic],
+                    [
+                      "partial downloads",
+                      result.source_test.range_supported === undefined
+                        ? undefined
+                        : result.source_test.range_supported
+                          ? "supported"
+                          : "not supported (the bot serves ranges itself)",
+                    ],
                     ["error", result.source_test.error],
                   ] as const
                 )

@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/CodeMeAPixel/Chilly/musicbot"
@@ -23,6 +24,8 @@ type Server struct {
 	limiter  *rateLimiter
 	strict   *rateLimiter
 	status   *statusTracker
+
+	mediaNoRange sync.Map
 }
 
 func New(bot *musicbot.Bot) *Server {

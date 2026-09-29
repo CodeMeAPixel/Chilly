@@ -2,13 +2,59 @@ package api
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
 	"strconv"
+	"strings"
 )
 
 var mediaHeaders = []string{"Content-Type", "Content-Length", "Content-Range", "Accept-Ranges", "Last-Modified", "ETag"}
+
+type byteRange struct {
+	start, end int64
+}
+
+type rangeResult int
+
+const (
+	rangeIgnored rangeResult = iota
+	rangeValid
+	rangeUnsatisfiable
+)
+
+func parseRange(header string, total int64) (byteRange, rangeResult) {
+	spec, ok := strings.CutPrefix(strings.TrimSpace(header), "bytes=")
+	if !ok || strings.Contains(spec, ",") || total <= 0 {
+		return byteRange{}, rangeIgnored
+	}
+	first, last, ok := strings.Cut(spec, "-")
+	if !ok {
+		return byteRange{}, rangeIgnored
+	}
+	if first == "" {
+		n, err := strconv.ParseInt(last, 10, 64)
+		if err != nil || n <= 0 {
+			return byteRange{}, rangeIgnored
+		}
+		return byteRange{start: max(total-n, 0), end: total - 1}, rangeValid
+	}
+	start, err := strconv.ParseInt(first, 10, 64)
+	if err != nil || start < 0 {
+		return byteRange{}, rangeIgnored
+	}
+	end := total - 1
+	if last != "" {
+		if end, err = strconv.ParseInt(last, 10, 64); err != nil || end < start {
+			return byteRange{}, rangeIgnored
+		}
+	}
+	if start >= total {
+		return byteRange{}, rangeUnsatisfiable
+	}
+	return byteRange{start: start, end: min(end, total-1)}, rangeValid
+}
 
 func (s *Server) handleMedia(w http.ResponseWriter, r *http.Request) {
 	if s.bot.Media == nil || s.bot.Radio == nil {
@@ -22,7 +68,25 @@ func (s *Server) handleMedia(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	upstream, err := s.bot.Radio.Client().PlayFile(r.Context(), station, id, r.Header.Get("Range"))
+	rangeHeader := r.Header.Get("Range")
+	_, noRanges := s.mediaNoRange.Load(station)
+	emulate := rangeHeader != "" && noRanges
+
+	client := s.bot.Radio.Client()
+	forwarded := rangeHeader
+	if emulate {
+		forwarded = ""
+	}
+	upstream, err := client.PlayFile(r.Context(), station, id, forwarded)
+	if err == nil && upstream.StatusCode >= 500 && forwarded != "" {
+		upstream.Body.Close()
+		upstream, err = client.PlayFile(r.Context(), station, id, "")
+		if err == nil && upstream.StatusCode == http.StatusOK {
+			s.mediaNoRange.Store(station, true)
+			slog.Info("music library can't serve partial content for this station; serving ranges from full downloads", slog.String("station", station))
+			emulate = true
+		}
+	}
 	if err != nil {
 		if !errors.Is(r.Context().Err(), err) {
 			slog.Warn("failed to fetch library media", slog.String("station", station), slog.Int("id", id), slog.Any("error", err))
@@ -41,9 +105,16 @@ func (s *Server) handleMedia(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(upstream.StatusCode)
 		return
 	default:
+		body, _ := io.ReadAll(io.LimitReader(upstream.Body, 1024))
 		slog.Warn("music library returned an error for media",
-			slog.String("station", station), slog.Int("id", id), slog.Int("status", upstream.StatusCode))
+			slog.String("station", station), slog.Int("id", id), slog.Int("status", upstream.StatusCode),
+			slog.String("body", strings.TrimSpace(string(body))))
 		writeError(w, http.StatusBadGateway, "upstream_error", "the music library returned an error")
+		return
+	}
+
+	if emulate && upstream.StatusCode == http.StatusOK {
+		serveRangeFromFull(w, r, upstream, rangeHeader)
 		return
 	}
 
@@ -58,4 +129,43 @@ func (s *Server) handleMedia(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_, _ = io.Copy(w, upstream.Body)
+}
+
+func serveRangeFromFull(w http.ResponseWriter, r *http.Request, upstream *http.Response, rangeHeader string) {
+	total := upstream.ContentLength
+	h := w.Header()
+	h.Set("Cache-Control", "private, no-store")
+	h.Set("Accept-Ranges", "bytes")
+	if ct := upstream.Header.Get("Content-Type"); ct != "" {
+		h.Set("Content-Type", ct)
+	}
+
+	rng, result := parseRange(rangeHeader, total)
+	switch result {
+	case rangeUnsatisfiable:
+		h.Set("Content-Range", fmt.Sprintf("bytes */%d", total))
+		w.WriteHeader(http.StatusRequestedRangeNotSatisfiable)
+		return
+	case rangeIgnored:
+		if total > 0 {
+			h.Set("Content-Length", strconv.FormatInt(total, 10))
+		}
+		w.WriteHeader(http.StatusOK)
+		if r.Method != http.MethodHead {
+			_, _ = io.Copy(w, upstream.Body)
+		}
+		return
+	}
+
+	length := rng.end - rng.start + 1
+	h.Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", rng.start, rng.end, total))
+	h.Set("Content-Length", strconv.FormatInt(length, 10))
+	w.WriteHeader(http.StatusPartialContent)
+	if r.Method == http.MethodHead {
+		return
+	}
+	if _, err := io.CopyN(io.Discard, upstream.Body, rng.start); err != nil {
+		return
+	}
+	_, _ = io.CopyN(w, upstream.Body, length)
 }

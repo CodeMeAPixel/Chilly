@@ -535,7 +535,7 @@ function SendToServer({ station, placement }: { station: Station; placement: "up
         <div
           className={cn(
             "absolute z-40 w-72 max-w-[calc(100vw-2rem)] rounded-2xl border border-border bg-surface p-2 shadow-2xl",
-            placement === "up" ? "right-0 bottom-full mb-3" : "top-full left-0 mt-2 sm:right-auto",
+            placement === "up" ? "right-0 bottom-full mb-3" : "top-full right-0 mt-2",
           )}
         >
           <label className="flex cursor-pointer items-start gap-3 rounded-xl px-3 py-2.5 hover:bg-surface-2">
