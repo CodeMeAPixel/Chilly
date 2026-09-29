@@ -17,7 +17,10 @@ import (
 	"github.com/disgoorg/snowflake/v2"
 )
 
-const aloneTimeout = 30 * time.Second
+const (
+	aloneTimeout = 30 * time.Second
+	idleTimeout  = 2 * time.Minute
+)
 
 type Handlers struct {
 	*musicbot.Bot
@@ -25,6 +28,8 @@ type Handlers struct {
 	serverSeen  map[snowflake.ID]bool
 	aloneMu     sync.Mutex
 	aloneTimers map[snowflake.ID]*time.Timer
+	idleMu      sync.Mutex
+	idleTimers  map[snowflake.ID]*time.Timer
 
 	viewMu sync.Mutex
 	views  map[snowflake.ID]string
@@ -35,6 +40,7 @@ func New(b *musicbot.Bot) *Handlers {
 		Bot:         b,
 		serverSeen:  make(map[snowflake.ID]bool),
 		aloneTimers: make(map[snowflake.ID]*time.Timer),
+		idleTimers:  make(map[snowflake.ID]*time.Timer),
 		views:       make(map[snowflake.ID]string),
 	}
 }
@@ -100,13 +106,58 @@ func (h *Handlers) scheduleLeave(guildID snowflake.ID) {
 		if !ok || h.listenersIn(guildID, botChannel) > 0 || h.Stays.Enabled(guildID) {
 			return
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		if err := h.Client.UpdateVoiceState(ctx, guildID, nil, false, false); err != nil {
-			slog.Error("failed to disconnect from voice channel",
-				slog.Any("error", err), slog.String("guild_id", guildID.String()))
+		h.leaveVoice(guildID)
+	})
+}
+
+func (h *Handlers) scheduleIdleLeave(guildID snowflake.ID) {
+	if h.Stays.Enabled(guildID) {
+		return
+	}
+	h.idleMu.Lock()
+	defer h.idleMu.Unlock()
+	if _, pending := h.idleTimers[guildID]; pending {
+		return
+	}
+	h.idleTimers[guildID] = time.AfterFunc(idleTimeout, func() {
+		h.idleMu.Lock()
+		delete(h.idleTimers, guildID)
+		h.idleMu.Unlock()
+
+		if _, ok := h.BotVoiceChannel(guildID); !ok || h.Stays.Enabled(guildID) {
+			return
+		}
+		var textChannel snowflake.ID
+		if player, ok := h.PlayerManager.GetPlayer(guildID); ok {
+			if player.IsPlaying() {
+				return
+			}
+			textChannel = player.ChannelID()
+		}
+		if h.leaveVoice(guildID) && textChannel != 0 {
+			h.tempMessage(guildID, textChannel, "👋 Nothing left to play, so I left the voice channel. Use `/play` to start again.")
 		}
 	})
+}
+
+func (h *Handlers) cancelIdleLeave(guildID snowflake.ID) {
+	h.idleMu.Lock()
+	defer h.idleMu.Unlock()
+	if t, ok := h.idleTimers[guildID]; ok {
+		t.Stop()
+		delete(h.idleTimers, guildID)
+	}
+}
+
+func (h *Handlers) leaveVoice(guildID snowflake.ID) bool {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := h.Client.UpdateVoiceState(ctx, guildID, nil, false, false); err != nil {
+		slog.Error("failed to disconnect from voice channel",
+			slog.Any("error", err), slog.String("guild_id", guildID.String()))
+		return false
+	}
+	return true
 }
 
 func (h *Handlers) cancelLeave(guildID snowflake.ID) {
@@ -150,10 +201,17 @@ func (h *Handlers) onBotVoiceStateUpdate(event *events.GuildVoiceStateUpdate) {
 	h.voiceMu.Unlock()
 
 	if channelID != nil {
+		if h.listenersIn(guildID, *channelID) == 0 {
+			h.scheduleLeave(guildID)
+		}
+		if player, ok := h.PlayerManager.GetPlayer(guildID); !ok || !player.IsPlaying() {
+			h.scheduleIdleLeave(guildID)
+		}
 		return
 	}
 
 	h.cancelLeave(guildID)
+	h.cancelIdleLeave(guildID)
 	player, ok := h.PlayerManager.GetPlayer(guildID)
 	if !ok {
 		return
@@ -199,6 +257,7 @@ func (h *Handlers) OnTrackStart(p disgolink.Player, event lavalink.TrackStartEve
 		return
 	}
 	player.OnTrackStart(event.Track)
+	h.cancelIdleLeave(p.GuildID())
 
 	go h.postPlayerMessage(player)
 }
@@ -246,6 +305,9 @@ func (h *Handlers) OnTrackEnd(p disgolink.Player, event lavalink.TrackEndEvent) 
 		cancel()
 	} else {
 		_ = player.OnTrackEnd(context.Background(), event)
+	}
+	if !player.IsPlaying() {
+		h.scheduleIdleLeave(p.GuildID())
 	}
 
 	oldMessage := player.TakePlayerMessage()

@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- Library songs are cached on disk (`MEDIA_CACHE_DIR`, `MEDIA_CACHE_MAX_MB`), so Lavalink loads and seeks them instantly even when AzuraCast stores media on S3.
+- The bot leaves the voice channel 2 minutes after the queue runs out. Servers with 24/7 radio turned on are never disconnected.
+
+### Fixed
+
+- The bot now also leaves an empty voice channel after it joins or rejoins one, not only when the last listener leaves.
+- Library playback works when AzuraCast can't serve partial downloads; the bot serves the requested bytes itself.
+- Lavalink load failures now include the underlying cause and the node name.
+
 ## [2.0.0] - 2026-09-29
 
 Chilly is now a 24/7 radio bot powered entirely by AzuraCast. Stations can stay on around the clock, every song comes from your own AzuraCast library, and listeners can request and suggest songs. Third-party sources such as YouTube and Spotify are gone.
