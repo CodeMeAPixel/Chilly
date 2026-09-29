@@ -106,13 +106,13 @@ func (c *MediaCache) download(ctx context.Context, station string, id int, path 
 		c.inflight[path] = d
 		go func() {
 			d.err = c.fetch(station, id, path)
+			if d.err == nil {
+				c.evict(path)
+			}
 			c.mu.Lock()
 			delete(c.inflight, path)
 			c.mu.Unlock()
 			close(d.done)
-			if d.err == nil {
-				c.evict(path)
-			}
 		}()
 	}
 	c.mu.Unlock()
