@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"math"
 	"net/http"
 	"net/url"
@@ -151,8 +152,10 @@ func (c *LyricsClient) Lookup(ctx context.Context, q SongQuery) (*Lyrics, error)
 	return lyrics, nil
 }
 
+const maxExactLookupMs = 3600 * 1000
+
 func (c *LyricsClient) find(ctx context.Context, q SongQuery) (*lrclibRecord, error) {
-	if q.Artist != "" && q.DurationMs > 0 {
+	if q.Artist != "" && q.DurationMs >= 1000 && q.DurationMs <= maxExactLookupMs {
 		params := url.Values{"track_name": {q.Title}, "artist_name": {q.Artist}, "duration": {strconv.FormatInt(q.DurationMs/1000, 10)}}
 		var record lrclibRecord
 		if err := c.get(ctx, "/api/get", params, &record); err == nil && hasLyrics(record) {
@@ -252,6 +255,10 @@ func (c *LyricsClient) getOnce(ctx context.Context, path string, params url.Valu
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode == http.StatusNotFound {
+		return ErrLyricsNotFound
+	}
+	if resp.StatusCode >= 400 && resp.StatusCode < 500 && resp.StatusCode != http.StatusTooManyRequests {
+		slog.Debug("lyrics provider rejected a query", slog.String("path", path), slog.Int("status", resp.StatusCode))
 		return ErrLyricsNotFound
 	}
 	if resp.StatusCode != http.StatusOK {

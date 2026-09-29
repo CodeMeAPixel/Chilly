@@ -148,3 +148,39 @@ type lookupFunc func() error
 func (f lookupFunc) Lookup(context.Context, SongQuery) (*Lyrics, error) {
 	return nil, f()
 }
+
+type countingLyrics struct {
+	calls int
+}
+
+func (c *countingLyrics) Lookup(context.Context, SongQuery) (*Lyrics, error) {
+	c.calls++
+	return nil, ErrLyricsNotFound
+}
+
+func TestBackfillSkipsLongMixesWithoutLookup(t *testing.T) {
+	lib := NewLibrary(fakeFetcher{"mix": {
+		{ID: 1, SongID: "long", Title: "Two Hour Mix", Artist: "DJ", Length: 7200},
+		{ID: 2, SongID: "song", Title: "Normal Song", Artist: "Band", Length: 210},
+	}}, func() []string { return []string{"mix"} })
+	if err := lib.Sync(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	lookup := &countingLyrics{}
+	store := memoryStore{}
+	job := NewLyricsBackfill(lib, lookup, &fakeWriter{writes: map[string]string{}}, store)
+	job.Delay = 0
+
+	if err := job.RunOnce(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if lookup.calls != 1 {
+		t.Errorf("only the normal song should be looked up, got %d lookups", lookup.calls)
+	}
+	if _, recorded := store["long"]; !recorded {
+		t.Error("long mixes should be recorded so they aren't retried every run")
+	}
+	if stats := job.Stats(); stats.NotFound != 2 {
+		t.Errorf("unexpected stats %+v", stats)
+	}
+}

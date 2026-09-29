@@ -73,3 +73,38 @@ func TestLookupFallsBackToSearchAndPicksClosestDuration(t *testing.T) {
 		t.Fatalf("second lookup should be cached, search called %d times", calls["/api/search"])
 	}
 }
+
+func TestLyricsHandlesProviderLimits(t *testing.T) {
+	var paths []string
+	status := http.StatusOK
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		paths = append(paths, r.URL.Path)
+		if status != http.StatusOK {
+			w.WriteHeader(status)
+			_, _ = w.Write([]byte(`{"message":"rejected"}`))
+			return
+		}
+		_, _ = w.Write([]byte(`[]`))
+	}))
+	defer srv.Close()
+	client := NewLyricsClient(srv.URL)
+
+	if _, err := client.Lookup(context.Background(), SongQuery{Title: "Roll One", Artist: "Slow Burner", DurationMs: 5_982_000}); err != ErrLyricsNotFound {
+		t.Fatalf("expected not found, got %v", err)
+	}
+	for _, p := range paths {
+		if p == "/api/get" {
+			t.Error("songs over an hour must not use the exact lookup")
+		}
+	}
+
+	status = http.StatusBadRequest
+	if _, err := client.Lookup(context.Background(), SongQuery{Title: "Other", Artist: "Someone", DurationMs: 200_000}); err != ErrLyricsNotFound {
+		t.Errorf("validation errors should count as not found, got %v", err)
+	}
+
+	status = http.StatusTooManyRequests
+	if _, err := client.Lookup(context.Background(), SongQuery{Title: "Third", Artist: "Someone", DurationMs: 200_000}); err == nil || err == ErrLyricsNotFound {
+		t.Errorf("rate limiting must surface as an error, got %v", err)
+	}
+}

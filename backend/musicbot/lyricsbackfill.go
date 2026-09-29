@@ -13,6 +13,8 @@ import (
 	"github.com/CodeMeAPixel/Chilly/azuracast"
 )
 
+const maxLyricsTrackMs = 20 * 60 * 1000
+
 type LyricsLookup interface {
 	Lookup(ctx context.Context, q SongQuery) (*Lyrics, error)
 }
@@ -119,11 +121,19 @@ func (j *LyricsBackfill) RunOnce(ctx context.Context) error {
 	}
 
 	written, notFound := 0, 0
+	lookups := 0
 	for i, t := range candidates {
 		if i >= j.PerRun {
 			break
 		}
-		if i > 0 && j.Delay > 0 {
+		if t.LengthMs > maxLyricsTrackMs {
+			notFound++
+			if err := j.store.RecordBackfill(ctx, backfillKey(t), false); err != nil {
+				return j.finish(written, notFound, len(candidates)-i-1, err)
+			}
+			continue
+		}
+		if lookups > 0 && j.Delay > 0 {
 			select {
 			case <-ctx.Done():
 				return j.finish(written, notFound, len(candidates)-i, ctx.Err())
@@ -131,6 +141,7 @@ func (j *LyricsBackfill) RunOnce(ctx context.Context) error {
 			}
 		}
 
+		lookups++
 		found, err := j.lyrics.Lookup(ctx, SongQuery{Title: t.Title, Artist: t.Artist, DurationMs: t.LengthMs})
 		text := ""
 		if err == nil && found != nil && !found.Instrumental {
