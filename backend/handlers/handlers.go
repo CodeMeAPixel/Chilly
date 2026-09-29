@@ -288,8 +288,13 @@ func (h *Handlers) OnTrackException(p disgolink.Player, event lavalink.TrackExce
 }
 
 func (h *Handlers) OnTrackStuck(p disgolink.Player, event lavalink.TrackStuckEvent) {
+	node := ""
+	if n := p.Node(); n != nil {
+		node = n.Config().Name
+	}
 	slog.Warn("track stuck",
 		slog.String("guild_id", p.GuildID().String()),
+		slog.String("node", node),
 		slog.String("title", event.Track.Info.Title),
 		slog.Any("threshold", event.Threshold),
 	)
