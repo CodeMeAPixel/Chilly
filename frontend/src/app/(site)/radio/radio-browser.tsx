@@ -244,14 +244,11 @@ function Spotlight({
   const pct = np?.duration ? Math.min(100, (elapsed / np.duration) * 100) : 0;
 
   return (
-    <div className="relative overflow-hidden rounded-4xl border border-border bg-surface">
+    <div className="relative z-10 rounded-4xl border border-border bg-surface">
       {art && (
-        <img
-          src={art}
-          alt=""
-          aria-hidden
-          className="pointer-events-none absolute inset-0 h-full w-full scale-125 object-cover opacity-25 blur-3xl"
-        />
+        <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-4xl" aria-hidden>
+          <img src={art} alt="" className="h-full w-full scale-125 object-cover opacity-25 blur-3xl" />
+        </div>
       )}
       <div className="relative grid grid-cols-1 gap-8 p-6 sm:p-8 lg:grid-cols-[minmax(0,1fr)_300px]">
         <div className="flex flex-col gap-6 sm:flex-row sm:items-center">
@@ -431,7 +428,7 @@ function StationTile({
         aria-label={listening ? `Stop ${station.name}` : `Listen to ${station.name}`}
         className="relative h-10 w-10 shrink-0 rounded-full"
       >
-        {listening ? <Equalizer className="h-3.5" /> : <Play className="h-4 w-4 fill-current" />}
+        {listening ? <Pause className="h-4 w-4 fill-current" /> : <Play className="h-4 w-4 fill-current" />}
       </Button>
       {station.online && progress > 0 && (
         <span className="pointer-events-none absolute right-0 bottom-0 left-0 h-0.5 bg-surface-2">
